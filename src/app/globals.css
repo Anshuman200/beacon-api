@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg-base: #f8fafc; /* slate-50 */
+  --bg-card: rgba(255, 255, 255, 0.65);
+  --border-subtle: rgba(15, 23, 42, 0.06); /* slate-900 at 6% */
+  --border-mid: rgba(15, 23, 42, 0.12);
+  --accent: #0284c7; /* neon blue (sky-600) */
+  --success: #10b981;
+  --error: #f43f5e;
+  --text-primary: #0f172a; /* slate-900 */
+  --text-secondary: #475569; /* slate-600 */
+  --glass-blur: 16px;
+
+  /* Theme variables mapped to theme block */
+  --indigo-50: #f0f9ff;
+  --indigo-100: #e0f2fe;
+  --indigo-200: #bae6fd;
+  --indigo-300: #7dd3fc;
+  --indigo-400: #38bdf8;
+  --indigo-500: #0284c7;
+  --indigo-600: #0369a1;
+  --indigo-700: #075985;
+  --indigo-800: #0c4a6e;
+  --indigo-900: #082f49;
+  --indigo-950: #021a2e;
+
+  --violet-50: #ecfeff;
+  --violet-100: #cffafe;
+  --violet-200: #a5f3fc;
+  --violet-300: #67e8f9;
+  --violet-400: #22d3ee;
+  --violet-500: #06b6d4;
+  --violet-600: #0891b2;
+  --violet-700: #0e7490;
+  --violet-800: #155e75;
+  --violet-900: #164e63;
+  --violet-950: #083344;
+
+  /* Custom Slates */
+  --slate-350: #b0bccd;
+  --slate-450: #7c8ba0;
+  --slate-550: #55647a;
+  --slate-650: #3d4b5f;
+}
+
+/* Dark mode overrides */
+.dark {
+  --bg-base: #07080f;
+  --bg-card: rgba(255, 255, 255, 0.028);
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-mid: rgba(255, 255, 255, 0.12);
+  --accent: #00a3ff; /* neon blue */
+  --success: #10b981;
+  --error: #f43f5e;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+
+  --indigo-50: #e0f7ff;
+  --indigo-100: #b3eaff;
+  --indigo-200: #80daff;
+  --indigo-300: #4dcbff;
+  --indigo-400: #1abaff;
+  --indigo-500: #00a3ff;
+  --indigo-600: #0082cc;
+  --indigo-700: #006299;
+  --indigo-800: #004166;
+  --indigo-900: #002133;
+  --indigo-950: #000d1a;
+
+  --violet-50: #e6fffa;
+  --violet-100: #b3fff0;
+  --violet-200: #80ffe0;
+  --violet-300: #4dffd1;
+  --violet-400: #1affc2;
+  --violet-500: #00ffb3;
+  --violet-600: #00cc8f;
+  --violet-700: #00996b;
+  --violet-800: #006647;
+  --violet-900: #003324;
+  --violet-950: #001a12;
+
+  /* Custom Slates (inverted in dark mode for contrast) */
+  --slate-350: #cbd5e1;
+  --slate-450: #94a3b8;
+  --slate-550: #64748b;
+  --slate-650: #475569;
+}
+
+@theme inline {
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-indigo-50: var(--indigo-50);
+  --color-indigo-100: var(--indigo-100);
+  --color-indigo-200: var(--indigo-200);
+  --color-indigo-300: var(--indigo-300);
+  --color-indigo-400: var(--indigo-400);
+  --color-indigo-500: var(--indigo-500);
+  --color-indigo-600: var(--indigo-600);
+  --color-indigo-700: var(--indigo-700);
+  --color-indigo-800: var(--indigo-800);
+  --color-indigo-900: var(--indigo-900);
+  --color-indigo-950: var(--indigo-950);
+
+  --color-violet-50: var(--violet-50);
+  --color-violet-100: var(--violet-100);
+  --color-violet-200: var(--violet-200);
+  --color-violet-300: var(--violet-300);
+  --color-violet-400: var(--violet-400);
+  --color-violet-500: var(--violet-500);
+  --color-violet-600: var(--violet-600);
+  --color-violet-700: var(--violet-700);
+  --color-violet-800: var(--violet-800);
+  --color-violet-900: var(--violet-900);
+  --color-violet-950: var(--violet-950);
+
+  /* Custom Slates */
+  --color-slate-350: var(--slate-350);
+  --color-slate-450: var(--slate-450);
+  --color-slate-550: var(--slate-550);
+  --color-slate-650: var(--slate-650);
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  background-image:
+    radial-gradient(ellipse 100% 65% at 50% -8%, rgba(2, 132, 199, 0.05) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 45% at 92% 100%, rgba(6, 182, 212, 0.03) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 35% at 8% 85%, rgba(14, 165, 233, 0.02) 0%, transparent 50%);
+}
+
+.dark body {
+  background-image:
+    radial-gradient(ellipse 100% 65% at 50% -8%, rgba(0, 163, 255, 0.20) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 45% at 92% 100%, rgba(0, 255, 179, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 45% 35% at 8% 85%, rgba(0, 194, 255, 0.06) 0%, transparent 50%);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 163, 255, 0.3); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 163, 255, 0.6); }
+
+/* ── JSON editor ─────────────────────────────────────────── */
+.json-editor {
+  font-family: var(--font-geist-mono), 'Consolas', monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  tab-size: 2;
+}
+
+/* ── Shimmer progress ────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -300% 0; }
+  100% { background-position:  300% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,
+    #00a3ff 0%, #00ffd1 30%, #00a3ff 50%, #00ffd1 70%, #00a3ff 100%);
+  background-size: 300% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* ── Pulse dot ───────────────────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.8); }
+}
+.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+/* ── Grid card entrance ──────────────────────────────────── */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+.card-in { animation: cardIn 0.25s ease-out both; }
+
+/* ── Glow effects ────────────────────────────────────────── */
+.glow-indigo { box-shadow: 0 0 20px rgba(0, 163, 255, 0.15); }
+.glow-success { box-shadow: 0 0 16px rgba(16,185,129,0.12); }
+.glow-error   { box-shadow: 0 0 16px rgba(244,63,94,0.12); }
+
+/* ── Float animation (empty state icon) ──────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+.float-icon { animation: float 3.5s ease-in-out infinite; }
+
+/* ── Glass card base ─────────────────────────────────────── */
+.glass {
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* ── Ant Design Tabs Height Fixes ────────────────────────── */
+.ant-tabs.h-full {
+  display: flex;
+  flex-direction: column;
+}
+.ant-tabs.h-full > .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ant-tabs.h-full > .ant-tabs-content-holder > .ant-tabs-content {
+  height: 100%;
+}
+.ant-tabs.h-full > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+  height: 100%;
+}
+
+/* ── Environment Drawer — Dark Mode ─────────────────────── */
+.dark .environment-drawer .ant-drawer-content {
+  background: #07080f;
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+}
+.dark .environment-drawer .ant-drawer-body {
+  background: transparent;
+}

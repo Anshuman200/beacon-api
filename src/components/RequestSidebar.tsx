@@ -1,0 +1,598 @@
+"use client";
+
+import { useState } from "react";
+import { useSeederStore } from "@/store/seederStore";
+import { useCollectionStore } from "@/store/collectionStore";
+import { DEMO_REQUESTS, DEMO_ENVIRONMENT } from "@/lib/demoData";
+import {
+  FiPlus, FiTrash2, FiCopy, FiSearch, FiClock, FiPlay,
+  FiActivity, FiZap, FiEdit2, FiCheck, FiX, FiChevronDown, FiChevronRight,
+  FiFolder, FiFolderPlus,
+} from "react-icons/fi";
+import { Button, Input, Tooltip, message, Popconfirm, Segmented } from "antd";
+
+export default function RequestSidebar() {
+  const { activeView, setActiveView, isRunning } = useSeederStore();
+
+  const {
+    collections,
+    activeCollectionId,
+    activeRequestId,
+    setActiveCollectionId,
+    setActiveRequestId,
+    addCollection,
+    renameCollection,
+    deleteCollection,
+    addRequest,
+    deleteRequest,
+    duplicateRequest,
+    history,
+    clearHistory,
+    environments,
+    addEnvironment,
+    updateEnvironment,
+    setActiveEnvironmentId,
+  } = useCollectionStore();
+
+  // ── UI State ──
+  const [sidebarTab, setSidebarTab] = useState<"requests" | "history">("requests");
+  const [search, setSearch] = useState("");
+
+  // Which collections are collapsed (default: all expanded)
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  // Inline rename state
+  const [editingColId, setEditingColId] = useState<string | null>(null);
+  const [draftColName, setDraftColName] = useState("");
+
+  // Inline request rename state
+  const [editingReqId, setEditingReqId] = useState<string | null>(null);
+  const [draftReqName, setDraftReqName] = useState("");
+
+  const [loadingDemo, setLoadingDemo] = useState(false);
+
+  // ── Helpers ──
+  const isExpanded = (colId: string) => !collapsedIds.has(colId);
+
+  const toggleCollapse = (colId: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(colId)) next.delete(colId);
+      else next.add(colId);
+      return next;
+    });
+  };
+
+  // ── Collection actions ──
+  const handleAddCollection = () => {
+    const id = addCollection();
+    setCollapsedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    const newCol = useCollectionStore.getState().collections.find((c) => c.id === id);
+    setDraftColName(newCol?.name || "New Collection");
+    setEditingColId(id);
+  };
+
+  const handleConfirmRename = (id: string) => {
+    const trimmed = draftColName.trim();
+    if (trimmed) renameCollection(id, trimmed);
+    setEditingColId(null);
+  };
+
+  const handleDeleteCollection = (id: string) => {
+    if (collections.length <= 1) {
+      message.warning("Cannot delete the last collection");
+      return;
+    }
+    deleteCollection(id);
+    message.success("Collection deleted");
+  };
+
+  // ── Request actions ──
+  const handleAddRequest = (collectionId: string) => {
+    const id = addRequest(collectionId);
+    setActiveCollectionId(collectionId);
+    setActiveView("client");
+    // Expand the collection if collapsed
+    setCollapsedIds((prev) => { const next = new Set(prev); next.delete(collectionId); return next; });
+    message.success("New request created");
+    // Auto-rename
+    const col = useCollectionStore.getState().collections.find((c) => c.id === collectionId);
+    const req = col?.requests.find((r) => r.id === id);
+    setDraftReqName(req?.name || "New Request");
+    setEditingReqId(id);
+  };
+
+  const handleDuplicate = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    duplicateRequest(id);
+    message.success("Request duplicated");
+  };
+
+  const handleDelete = (id: string) => {
+    deleteRequest(id);
+    message.success("Request deleted");
+  };
+
+  const handleRequestClick = (collectionId: string, requestId: string) => {
+    setActiveCollectionId(collectionId);
+    setActiveRequestId(requestId);
+    setActiveView("client");
+  };
+
+  const confirmReqRename = (id: string) => {
+    const trimmed = draftReqName.trim();
+    if (trimmed) {
+      // Find which collection owns this request and call updateRequest
+      useCollectionStore.getState().updateRequest(id, { name: trimmed });
+    }
+    setEditingReqId(null);
+  };
+
+  // ── Demo loader ──
+  const handleLoadDemo = async () => {
+    setLoadingDemo(true);
+    try {
+      const alreadyLoaded = collections.some((col) =>
+        col.requests.some((r) => r.id.startsWith("demo_req_"))
+      );
+      if (alreadyLoaded) {
+        message.info("Demo collection is already loaded!");
+        setLoadingDemo(false);
+        return;
+      }
+
+      const existingDemoEnv = environments.find((e) => e.name === "Beacon Demo");
+      let envId: string;
+      if (existingDemoEnv) {
+        envId = existingDemoEnv.id;
+        updateEnvironment(envId, { variables: DEMO_ENVIRONMENT.variables });
+      } else {
+        envId = addEnvironment(DEMO_ENVIRONMENT.name);
+        await new Promise((r) => setTimeout(r, 50));
+        updateEnvironment(envId, { variables: DEMO_ENVIRONMENT.variables });
+      }
+      setActiveEnvironmentId(envId);
+
+      // Create a dedicated demo collection
+      const demoColId = addCollection("Demo Collection");
+      await new Promise((r) => setTimeout(r, 30));
+      setCollapsedIds((prev) => { const next = new Set(prev); next.delete(demoColId); return next; });
+
+      for (const req of DEMO_REQUESTS) {
+        addRequest(demoColId, { ...req });
+        await new Promise((r) => setTimeout(r, 10));
+      }
+
+      setActiveCollectionId(demoColId);
+      setActiveRequestId(DEMO_REQUESTS[0].id);
+      setActiveView("client");
+
+      message.success({ content: "Demo collection loaded! 8 requests ready to explore.", duration: 4 });
+    } catch (err) {
+      message.error("Failed to load demo collection: " + String(err));
+    } finally {
+      setLoadingDemo(false);
+    }
+  };
+
+  // ── Method badge colour ──
+  const methodBadge = (method: string) => {
+    if (method === "GET") return "bg-emerald-500/10 text-emerald-500";
+    if (method === "DELETE") return "bg-rose-500/10 text-rose-500";
+    if (method === "PUT" || method === "PATCH") return "bg-amber-500/10 text-amber-550";
+    return "bg-indigo-500/10 text-indigo-500";
+  };
+
+  return (
+    <div className="w-full h-full flex flex-col bg-slate-500/5 dark:bg-white/[0.015] border-r border-slate-500/10 dark:border-white/[0.06] overflow-hidden">
+
+      {/* Tab switcher */}
+      <div className="p-3 border-b border-slate-500/10 dark:border-white/[0.06] shrink-0">
+        <Segmented
+          block
+          value={sidebarTab}
+          onChange={(val) => setSidebarTab(val as "requests" | "history")}
+          options={[
+            {
+              label: (
+                <div className="flex items-center justify-center gap-1.5 py-1 text-xs">
+                  <FiFolder className="w-3.5 h-3.5" />
+                  <span>Collections</span>
+                </div>
+              ),
+              value: "requests",
+            },
+            {
+              label: (
+                <div className="flex items-center justify-center gap-1.5 py-1 text-xs">
+                  <FiClock className="w-3.5 h-3.5" />
+                  <span>History</span>
+                </div>
+              ),
+              value: "history",
+            },
+          ]}
+          className="bg-slate-500/5 border border-slate-500/10 dark:bg-white/[0.01] dark:border-white/[0.05]"
+        />
+      </div>
+
+      {/* Search + new collection */}
+      <div className="px-3 pb-3 pt-2.5 border-b border-slate-500/10 dark:border-white/[0.06] shrink-0 flex items-center gap-2">
+        <Input
+          prefix={<FiSearch className="text-slate-500 w-3.5 h-3.5" />}
+          placeholder={sidebarTab === "requests" ? "Search requests..." : "Search logs..."}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          size="small"
+          className="text-xs"
+          allowClear
+        />
+        {sidebarTab === "requests" && (
+          <Tooltip title="New Collection">
+            <Button
+              size="small"
+              icon={<FiFolderPlus className="w-3.5 h-3.5" />}
+              onClick={handleAddCollection}
+              disabled={isRunning}
+              className="flex items-center justify-center shrink-0 border-slate-500/20 dark:border-white/10 text-indigo-500"
+            />
+          </Tooltip>
+        )}
+      </div>
+
+      {/* Scrollable list */}
+      <div className="flex-1 overflow-y-auto min-h-0 py-2 space-y-0.5">
+
+        {/* ── COLLECTIONS VIEW ── */}
+        {sidebarTab === "requests" && (
+          <>
+            {collections.length === 0 ? (
+              <div className="text-center py-10 text-xs text-slate-500">
+                No collections yet
+              </div>
+            ) : (
+              collections.map((col) => {
+                const expanded = isExpanded(col.id);
+                const isColActive = activeCollectionId === col.id;
+                const filteredReqs = col.requests.filter((r) =>
+                  !search ||
+                  r.name.toLowerCase().includes(search.toLowerCase()) ||
+                  r.method.toLowerCase().includes(search.toLowerCase()) ||
+                  `${r.baseUrl}/${r.endpoint}`.toLowerCase().includes(search.toLowerCase())
+                );
+
+                return (
+                  <div key={col.id} className="px-2">
+                    {/* Collection header */}
+                    <div
+                      className={`group flex items-center gap-1.5 px-2 py-1.5 rounded-xl cursor-pointer transition-all duration-150 ${
+                        isColActive
+                          ? "bg-indigo-500/8 dark:bg-indigo-500/10"
+                          : "hover:bg-slate-500/5 dark:hover:bg-white/[0.02]"
+                      }`}
+                      onClick={() => toggleCollapse(col.id)}
+                    >
+                      {/* Expand arrow */}
+                      <span className="text-slate-400 shrink-0 w-3.5">
+                        {expanded
+                          ? <FiChevronDown className="w-3 h-3" />
+                          : <FiChevronRight className="w-3 h-3" />}
+                      </span>
+
+                      {/* Collection name / edit input */}
+                      {editingColId === col.id ? (
+                        <Input
+                          autoFocus
+                          size="small"
+                          value={draftColName}
+                          onChange={(e) => setDraftColName(e.target.value)}
+                          onPressEnter={() => handleConfirmRename(col.id)}
+                          onBlur={() => handleConfirmRename(col.id)}
+                          onKeyDown={(e) => { if (e.key === "Escape") setEditingColId(null); }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs font-bold flex-1 h-6"
+                          maxLength={48}
+                        />
+                      ) : (
+                        <span className="flex-1 text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                          {col.name}
+                          <span className="text-slate-400 dark:text-slate-500 font-normal ml-1.5">
+                            ({col.requests.length})
+                          </span>
+                        </span>
+                      )}
+
+                      {/* Hover actions */}
+                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
+                        <Tooltip title="Rename">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDraftColName(col.name);
+                              setEditingColId(col.id);
+                            }}
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all cursor-pointer"
+                          >
+                            <FiEdit2 className="w-2.5 h-2.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip title="Add Request">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleAddRequest(col.id); }}
+                            disabled={isRunning}
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <FiPlus className="w-2.5 h-2.5" />
+                          </button>
+                        </Tooltip>
+                        <Popconfirm
+                          title="Delete collection"
+                          description={`Delete "${col.name}" and all its requests?`}
+                          onConfirm={() => handleDeleteCollection(col.id)}
+                          okText="Delete"
+                          cancelText="Cancel"
+                          okButtonProps={{ danger: true }}
+                          disabled={isRunning || collections.length <= 1}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => e.stopPropagation()}
+                            disabled={isRunning || collections.length <= 1}
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <FiTrash2 className="w-2.5 h-2.5" />
+                          </button>
+                        </Popconfirm>
+                      </div>
+                    </div>
+
+                    {/* Requests list */}
+                    {expanded && (
+                      <div className="ml-4 pl-2.5 border-l border-slate-500/10 dark:border-white/[0.05] mt-0.5 mb-1 space-y-0.5">
+                        {filteredReqs.length === 0 && !search && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddRequest(col.id)}
+                            disabled={isRunning}
+                            className="w-full text-left px-2 py-2.5 text-[10px] text-slate-400 dark:text-slate-600 hover:text-indigo-500 flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <FiPlus className="w-3 h-3" />
+                            Add a request
+                          </button>
+                        )}
+
+                        {filteredReqs.map((req) => {
+                          const isActive = activeRequestId === req.id && activeView === "client";
+                          const isEditingName = editingReqId === req.id;
+
+                          return (
+                            <div
+                              key={req.id}
+                              onClick={() => !isEditingName && handleRequestClick(col.id, req.id)}
+                              className={`flex items-center justify-between px-2.5 py-2 rounded-lg border cursor-pointer group/req transition-all duration-150 ${
+                                isActive
+                                  ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-600 dark:text-indigo-400"
+                                  : "bg-transparent border-transparent text-slate-700 dark:text-slate-400 hover:bg-slate-500/5 dark:hover:bg-white/[0.015] hover:border-slate-500/10"
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0 pr-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[8px] font-black px-1 rounded uppercase tracking-wider shrink-0 ${methodBadge(req.method)}`}>
+                                    {req.method}
+                                  </span>
+                                  {isEditingName ? (
+                                    <Input
+                                      autoFocus
+                                      size="small"
+                                      value={draftReqName}
+                                      onChange={(e) => setDraftReqName(e.target.value)}
+                                      onPressEnter={() => confirmReqRename(req.id)}
+                                      onBlur={() => confirmReqRename(req.id)}
+                                      onKeyDown={(e) => { if (e.key === "Escape") setEditingReqId(null); }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-xs flex-1 h-5 min-w-0"
+                                      maxLength={64}
+                                    />
+                                  ) : (
+                                    <span className="truncate text-xs font-semibold">{req.name}</span>
+                                  )}
+                                </div>
+                                {!isEditingName && (
+                                  <p className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
+                                    {req.baseUrl}/{req.endpoint}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* Request actions */}
+                              {!isEditingName && (
+                                <div className="flex items-center gap-0.5 opacity-0 group-hover/req:opacity-100 transition-opacity">
+                                  <Tooltip title="Rename">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDraftReqName(req.name);
+                                        setEditingReqId(req.id);
+                                      }}
+                                      className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all cursor-pointer"
+                                    >
+                                      <FiEdit2 className="w-2.5 h-2.5" />
+                                    </button>
+                                  </Tooltip>
+                                  <Tooltip title="Duplicate">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleDuplicate(req.id, e)}
+                                      disabled={isRunning}
+                                      className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                      <FiCopy className="w-2.5 h-2.5" />
+                                    </button>
+                                  </Tooltip>
+                                  <Popconfirm
+                                    title="Delete request?"
+                                    onConfirm={() => handleDelete(req.id)}
+                                    okText="Delete"
+                                    cancelText="Cancel"
+                                    okButtonProps={{ danger: true }}
+                                    disabled={isRunning}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={(e) => e.stopPropagation()}
+                                      disabled={isRunning}
+                                      className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                    >
+                                      <FiTrash2 className="w-2.5 h-2.5" />
+                                    </button>
+                                  </Popconfirm>
+                                </div>
+                              )}
+
+                              {isEditingName && (
+                                <div className="flex items-center gap-0.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); confirmReqRename(req.id); }}
+                                    className="w-5 h-5 flex items-center justify-center rounded text-emerald-500 hover:bg-emerald-500/10 cursor-pointer"
+                                  >
+                                    <FiCheck className="w-2.5 h-2.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setEditingReqId(null); }}
+                                    className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-500/10 cursor-pointer"
+                                  >
+                                    <FiX className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Add request at bottom of expanded collection */}
+                        {col.requests.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleAddRequest(col.id)}
+                            disabled={isRunning}
+                            className="w-full text-left px-2 py-1.5 text-[10px] text-slate-400 dark:text-slate-600 hover:text-indigo-500 flex items-center gap-1.5 transition-colors mt-0.5 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <FiPlus className="w-3 h-3" />
+                            Add request
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+
+            {/* New collection button */}
+            <div className="px-4 pt-1">
+              <button
+                type="button"
+                onClick={handleAddCollection}
+                disabled={isRunning}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/5 rounded-xl border border-dashed border-slate-500/15 dark:border-white/[0.06] transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <FiFolderPlus className="w-3.5 h-3.5" />
+                New Collection
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── HISTORY VIEW ── */}
+        {sidebarTab === "history" && (
+          history.length === 0 ? (
+            <div className="text-center py-10 text-xs text-slate-500">
+              No runs recorded yet
+            </div>
+          ) : (
+            <div className="space-y-1 px-2">
+              <div className="flex items-center justify-between px-2 py-1 shrink-0 mb-1">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Run Logs</span>
+                <button
+                  onClick={clearHistory}
+                  className="text-[9px] font-bold text-rose-500 hover:underline cursor-pointer"
+                >
+                  Clear All
+                </button>
+              </div>
+
+              {history
+                .filter((h) =>
+                  h.requestName.toLowerCase().includes(search.toLowerCase()) ||
+                  h.url.toLowerCase().includes(search.toLowerCase())
+                )
+                .map((log) => {
+                  const passed = log.status === "success";
+                  return (
+                    <div
+                      key={log.id}
+                      className="px-2.5 py-2 border border-slate-500/5 dark:border-white/[0.03] rounded-lg bg-slate-500/[0.01] dark:bg-white/[0.002] space-y-1"
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-bold">
+                        <span className="text-slate-900 dark:text-white truncate max-w-[120px]">
+                          {log.requestName}
+                        </span>
+                        <span className={passed ? "text-emerald-500" : "text-rose-500"}>
+                          {log.assertionPassCount}/{log.assertionTotalCount} assertions
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                        <span className="truncate max-w-[140px]">{log.url}</span>
+                        <span>{log.responseTime}ms</span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Bottom actions */}
+      <div className="p-3 border-t border-slate-500/10 dark:border-white/[0.06] bg-slate-500/5 dark:bg-white/[0.01] space-y-2 shrink-0">
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type={activeView === "client" ? "primary" : "default"}
+            icon={<FiActivity />}
+            onClick={() => setActiveView("client")}
+            className="text-xs font-bold h-9 flex items-center justify-center gap-1.5"
+            block
+          >
+            Builder
+          </Button>
+          <Button
+            type={activeView === "runner" ? "primary" : "default"}
+            icon={<FiPlay />}
+            onClick={() => setActiveView("runner")}
+            className="text-xs font-bold h-9 flex items-center justify-center gap-1.5"
+            block
+          >
+            Runner
+          </Button>
+        </div>
+
+        <Button
+          icon={<FiZap />}
+          onClick={handleLoadDemo}
+          loading={loadingDemo}
+          disabled={isRunning}
+          className="w-full text-xs font-bold h-8 flex items-center justify-center gap-1.5 border-indigo-500/30 text-indigo-500 hover:bg-indigo-500/10 dark:border-indigo-400/30 dark:text-indigo-400 dark:hover:bg-indigo-500/[0.08]"
+        >
+          Load Demo Collection
+        </Button>
+
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <!-- Cyan outer glow -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Neon ring glow -->
+    <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c0f1a" />
+      <stop offset="100%" stop-color="#070810" />
+    </linearGradient>
+    <!-- Squircle clip -->
+    <clipPath id="squircle">
+      <rect x="20" y="20" width="160" height="160" rx="36" ry="36" />
+    </clipPath>
+  </defs>
+
+  <!-- Cyan glow behind the card -->
+  <ellipse cx="100" cy="100" rx="70" ry="70" fill="#22d3ee" opacity="0.25" filter="url(#glow)" />
+
+  <!-- Card background -->
+  <rect x="20" y="20" width="160" height="160" rx="36" ry="36" fill="url(#bgGrad)" />
+
+  <!-- Card cyan border -->
+  <rect x="20" y="20" width="160" height="160" rx="36" ry="36"
+        fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0.38" />
+
+  <!-- Neon ring -->
+  <circle cx="100" cy="100" r="58"
+          fill="none" stroke="#67e8f9" stroke-width="2.5"
+          opacity="0.85" filter="url(#ringGlow)" />
+
+  <!-- B. text -->
+  <text x="100" y="118"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-size="62" font-weight="900"
+        text-anchor="middle"
+        fill="#ffffff"
+        letter-spacing="-2">B.</text>
+</svg>
