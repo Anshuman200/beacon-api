@@ -36,6 +36,7 @@ export default function CollectionRunner() {
     activeEnvironmentId,
     addToHistory,
     updateEnvironment,
+    updateCollectionVariables,
   } = useCollectionStore();
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId) || null;
@@ -105,14 +106,17 @@ export default function CollectionRunner() {
   const runRequest = async (
     req: ApiRequest,
     actEnv: Environment | null,
-    globEnv: Environment | null
+    globEnv: Environment | null,
+    colVars: KeyValuePair[]
   ): Promise<{
     log: RunnerLogItem;
     updatedActEnvVars: KeyValuePair[];
     updatedGlobEnvVars: KeyValuePair[];
+    updatedColVars: KeyValuePair[];
   }> => {
     let currentEnvVars = actEnv?.variables || [];
     let currentGlobalVars = globEnv?.variables || [];
+    let currentColVars = colVars;
 
     // 1. Run Pre-request Script
     if (req.preRequestScript) {
@@ -121,6 +125,7 @@ export default function CollectionRunner() {
         activeEnvId: actEnv?.id || null,
         activeEnvVariables: currentEnvVars,
         globalEnvVariables: currentGlobalVars,
+        collectionVariables: currentColVars,
         request: {
           url: req.baseUrl + "/" + req.endpoint,
           method: req.method,
@@ -134,11 +139,15 @@ export default function CollectionRunner() {
 
       currentEnvVars = preResult.activeEnvVariables;
       currentGlobalVars = preResult.globalEnvVariables;
+      currentColVars = preResult.collectionVariables;
 
       if (activeEnvironmentId) {
         updateEnvironment(activeEnvironmentId, { variables: currentEnvVars });
       }
       updateEnvironment("env_globals", { variables: currentGlobalVars });
+      if (activeCollectionId) {
+        updateCollectionVariables(activeCollectionId, currentColVars);
+      }
     }
 
     const resolvedActiveEnv = activeEnvironmentId
@@ -188,6 +197,7 @@ export default function CollectionRunner() {
           },
           updatedActEnvVars: currentEnvVars,
           updatedGlobEnvVars: currentGlobalVars,
+          updatedColVars: currentColVars,
         };
       }
 
@@ -209,6 +219,7 @@ export default function CollectionRunner() {
           activeEnvId: actEnv?.id || null,
           activeEnvVariables: currentEnvVars,
           globalEnvVariables: currentGlobalVars,
+          collectionVariables: currentColVars,
           request: {
             url: prepared.url,
             method: req.method,
@@ -229,11 +240,15 @@ export default function CollectionRunner() {
 
         currentEnvVars = postResult.activeEnvVariables;
         currentGlobalVars = postResult.globalEnvVariables;
+        currentColVars = postResult.collectionVariables;
 
         if (activeEnvironmentId) {
           updateEnvironment(activeEnvironmentId, { variables: currentEnvVars });
         }
         updateEnvironment("env_globals", { variables: currentGlobalVars });
+        if (activeCollectionId) {
+          updateCollectionVariables(activeCollectionId, currentColVars);
+        }
 
         scriptTestResults = postResult.testResults.map((tr) => ({
           id: `script_assert_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -265,6 +280,7 @@ export default function CollectionRunner() {
         },
         updatedActEnvVars: currentEnvVars,
         updatedGlobEnvVars: currentGlobalVars,
+        updatedColVars: currentColVars,
       };
     } catch {
       return {
@@ -282,6 +298,7 @@ export default function CollectionRunner() {
         },
         updatedActEnvVars: currentEnvVars,
         updatedGlobEnvVars: currentGlobalVars,
+        updatedColVars: currentColVars,
       };
     }
   };
@@ -324,6 +341,7 @@ export default function CollectionRunner() {
 
       let runningActEnvVars = activeEnv?.variables || [];
       let runningGlobEnvVars = globalsEnv?.variables || [];
+      let runningColVars = activeCollection?.variables || [];
 
       for (let i = 0; i < selectedRequests.length; i++) {
         if (abortRef.current) break;
@@ -345,11 +363,12 @@ export default function CollectionRunner() {
           variables: runningGlobEnvVars,
         };
 
-        const result = await runRequest(req, tempActEnv, tempGlobEnv);
+        const result = await runRequest(req, tempActEnv, tempGlobEnv, runningColVars);
         const log = result.log;
 
         runningActEnvVars = result.updatedActEnvVars;
         runningGlobEnvVars = result.updatedGlobEnvVars;
+        runningColVars = result.updatedColVars;
 
         // Update stats
         currentCompleted++;

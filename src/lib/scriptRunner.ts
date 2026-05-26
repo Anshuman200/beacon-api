@@ -5,6 +5,7 @@ export interface ScriptContext {
   activeEnvId: string | null;
   activeEnvVariables: KeyValuePair[];
   globalEnvVariables: KeyValuePair[];
+  collectionVariables: KeyValuePair[];
   request: {
     url: string;
     method: string;
@@ -29,6 +30,7 @@ export interface ScriptTestResult {
 export interface ScriptRunResult {
   activeEnvVariables: KeyValuePair[];
   globalEnvVariables: KeyValuePair[];
+  collectionVariables: KeyValuePair[];
   request: {
     url: string;
     method: string;
@@ -144,6 +146,8 @@ export function runScript(code: string, context: ScriptContext): ScriptRunResult
   // 1. Set up environments
   const activeVarsWrapper = createVarStore(context.activeEnvVariables || []);
   const globalVarsWrapper = createVarStore(context.globalEnvVariables || []);
+  const collectionVarsWrapper = createVarStore(context.collectionVariables || []);
+  const localVarsWrapper = createVarStore([]);
 
   if (!context.activeEnvId) {
     // Override set/unset of active environment to print warning
@@ -465,6 +469,8 @@ export function runScript(code: string, context: ScriptContext): ScriptRunResult
   const beNamespace = {
     environment: activeVarsWrapper.store,
     globals: globalVarsWrapper.store,
+    collectionVariables: collectionVarsWrapper.store,
+    locals: localVarsWrapper.store,
     variables: variablesObj,
     request: requestObj,
     response: responseObj,
@@ -551,6 +557,7 @@ export function runScript(code: string, context: ScriptContext): ScriptRunResult
   return {
     activeEnvVariables: activeVarsWrapper.updatedVariables,
     globalEnvVariables: globalVarsWrapper.updatedVariables,
+    collectionVariables: collectionVarsWrapper.updatedVariables,
     request: {
       url: requestObj.url,
       method: requestObj.method,

@@ -1,7 +1,7 @@
 "use client";
 
 import { AntdRegistry } from "@ant-design/nextjs-registry";
-import { ConfigProvider, theme as antdTheme } from "antd";
+import { ConfigProvider, App, theme as antdTheme } from "antd";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useSeederStore } from "@/store/seederStore";
@@ -9,17 +9,8 @@ import { useSeederStore } from "@/store/seederStore";
 export default function Providers({ children }: { children: ReactNode }) {
   const storeTheme = useSeederStore((state) => state.theme);
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setTimeout(() => {
-      setMounted(true);
-    }, 0);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-
     const applyTheme = (t: "light" | "dark" | "system") => {
       let resolved: "light" | "dark" = "dark";
       if (t === "system") {
@@ -46,7 +37,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       mediaQuery.addEventListener("change", handleChange);
       return () => mediaQuery.removeEventListener("change", handleChange);
     }
-  }, [storeTheme, mounted]);
+  }, [storeTheme]);
 
   const isDark = resolvedTheme === "dark";
   const algorithm = isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm;
@@ -100,7 +91,9 @@ export default function Providers({ children }: { children: ReactNode }) {
           },
         }}
       >
-        {children}
+        <App style={{ height: "100%" }}>
+          {children}
+        </App>
       </ConfigProvider>
     </AntdRegistry>
   );

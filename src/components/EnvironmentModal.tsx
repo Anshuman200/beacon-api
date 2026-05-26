@@ -68,7 +68,7 @@ export default function EnvironmentModal({ open, onClose }: Props) {
       open={open}
       onClose={onClose}
       placement="right"
-      width={1100}
+      size={1100}
       closeIcon={null}
       styles={{
         header: { display: "none" },

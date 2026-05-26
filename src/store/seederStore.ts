@@ -32,7 +32,12 @@ export const useSeederStore = create<SeederStore>()(
       envModalOpen: false,
 
       setActiveView: (activeView) => set({ activeView }),
-      setTheme: (theme) => set({ theme }),
+      setTheme: (theme) => {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("beacon-theme", theme);
+        }
+        set({ theme });
+      },
       setIsRunning: (isRunning) => set({ isRunning }),
       setTourActive: (tourActive) => set({ tourActive }),
       setEnvModalOpen: (envModalOpen) => set({ envModalOpen }),

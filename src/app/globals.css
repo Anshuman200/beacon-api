@@ -189,6 +189,16 @@ body {
 .glow-success { box-shadow: 0 0 16px rgba(16,185,129,0.12); }
 .glow-error   { box-shadow: 0 0 16px rgba(244,63,94,0.12); }
 
+/* ── Theme icon swap animation ───────────────────────────── */
+@keyframes theme-icon-pop {
+  0%   { opacity: 0; transform: scale(0.3) rotate(-25deg); }
+  65%  { transform: scale(1.2) rotate(6deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.theme-icon-pop {
+  animation: theme-icon-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 /* ── Float animation (empty state icon) ──────────────────── */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }

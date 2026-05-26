@@ -8,9 +8,58 @@ import { evaluateAssertions, AssertionResult } from "@/lib/assertions";
 import { runScript } from "@/lib/scriptRunner";
 import KeyValueTable from "./KeyValueTable";
 import { FiLoader, FiTerminal, FiDatabase, FiCheckCircle, FiXCircle, FiCpu, FiCode, FiLayers, FiPlus, FiCopy, FiAlignLeft, FiCoffee, FiTrash2 } from "react-icons/fi";
-import { Select, Input, Button, ConfigProvider, message, Tabs, InputNumber, Progress } from "antd";
+import { Select, Input, Button, ConfigProvider, message, Tabs, InputNumber, Progress, AutoComplete } from "antd";
 import confetti from "canvas-confetti";
 import { FaPlay } from "react-icons/fa";
+
+/* ── Script Snippets ── */
+const SCRIPT_SNIPPETS = [
+  {
+    category: "Response",
+    items: [
+      { label: "Parse JSON body", code: `const body = be.response.json();\nconsole.log("body:", body);` },
+      { label: "Get status code", code: `console.log("Status:", be.response.code);` },
+      { label: "Get response header", code: `console.log("Content-Type:", be.response.headers.get("content-type"));` },
+      { label: "Get response time", code: `console.log("Response time:", be.response.responseTime, "ms");` },
+    ],
+  },
+  {
+    category: "Variables — Set",
+    items: [
+      { label: "Set env variable", code: `be.environment.set("key", "value");` },
+      { label: "Set global variable", code: `be.globals.set("key", "value");` },
+      { label: "Set collection variable", code: `be.collectionVariables.set("key", "value");` },
+      { label: "Set local variable", code: `be.locals.set("key", "value");` },
+      { label: "Save token", code: `be.environment.set("token", be.response.json().access_token);\nconsole.log("Token saved");` },
+    ],
+  },
+  {
+    category: "Variables — Get",
+    items: [
+      { label: "Get env variable", code: `console.log(be.environment.get("key"));` },
+      { label: "Get global variable", code: `console.log(be.globals.get("key"));` },
+      { label: "Get collection variable", code: `console.log(be.collectionVariables.get("key"));` },
+      { label: "Get local variable", code: `console.log(be.locals.get("key"));` },
+    ],
+  },
+  {
+    category: "Variables — Clear",
+    items: [
+      { label: "Clear env variable", code: `be.environment.unset("key");` },
+      { label: "Clear global variable", code: `be.globals.unset("key");` },
+      { label: "Clear collection variable", code: `be.collectionVariables.unset("key");` },
+      { label: "Clear local variable", code: `be.locals.unset("key");` },
+    ],
+  },
+  {
+    category: "Tests",
+    items: [
+      { label: "Status is 200", code: `be.test("Status is 200", () => {\n  be.expect(be.response.code).to.equal(200);\n});` },
+      { label: "Response time < 500ms", code: `be.test("Response time < 500ms", () => {\n  be.expect(be.response.responseTime).to.be.lessThan(500);\n});` },
+      { label: "Response is success", code: `be.test("Response is OK", () => {\n  be.response.to.be.ok;\n});` },
+    ],
+  },
+];
 
 /* ── HTTP Method Colors ── */
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
@@ -42,16 +91,22 @@ export default function SeederWorkspace() {
 
   const {
     collections,
+    activeCollectionId,
     activeRequestId,
     updateRequest,
     environments,
     activeEnvironmentId,
     addToHistory,
     updateEnvironment,
+    updateCollectionVariables,
   } = useCollectionStore();
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId) || null;
   const globalsEnv = environments.find((e) => e.id === "env_globals") || null;
+  const activeCollection = useMemo(
+    () => collections.find((c) => c.id === activeCollectionId) || null,
+    [collections, activeCollectionId]
+  );
 
   // Active Request Resolver — search across all collections
   const activeReq = useMemo(() => {
@@ -116,11 +171,36 @@ export default function SeederWorkspace() {
 
   const abortRef = useRef(false);
 
+  // Script editor refs for cursor-position snippet insertion
+  const preScriptRef = useRef<{ resizableTextArea?: { textArea: HTMLTextAreaElement } } | null>(null);
+  const postScriptRef = useRef<{ resizableTextArea?: { textArea: HTMLTextAreaElement } } | null>(null);
+  const [focusedScript, setFocusedScript] = useState<"pre" | "post">("post");
+  const [lastClickedSnippet, setLastClickedSnippet] = useState<string | null>(null);
+
   // Sync update request shortcuts
   const handleUpdate = (updates: Partial<ApiRequest>) => {
     if (activeReq) {
       updateRequest(activeReq.id, updates);
     }
+  };
+
+  const insertSnippet = (code: string) => {
+    if (!activeReq) return;
+    const isPre = focusedScript === "pre";
+    const ref = isPre ? preScriptRef.current : postScriptRef.current;
+    const textarea = ref?.resizableTextArea?.textArea;
+    const current = isPre ? (activeReq.preRequestScript || "") : (activeReq.postResponseScript || "");
+    if (current.includes(code.trim())) return;
+    let newVal: string;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const prefix = current.slice(0, start);
+      const suffix = current.slice(textarea.selectionEnd);
+      newVal = prefix + (prefix && !prefix.endsWith("\n") ? "\n" : "") + code + "\n" + suffix;
+    } else {
+      newVal = current + (current && !current.endsWith("\n") ? "\n" : "") + code + "\n";
+    }
+    handleUpdate(isPre ? { preRequestScript: newVal } : { postResponseScript: newVal });
   };
 
   /* ── Assertions Evaluators ── */
@@ -267,6 +347,7 @@ export default function SeederWorkspace() {
 
       let currentEnvVars = activeEnv?.variables || [];
       let currentGlobalVars = globalsEnv?.variables || [];
+      let currentColVars = activeCollection?.variables || [];
 
       // Run Pre-request Script
       if (currentReq.preRequestScript) {
@@ -275,6 +356,7 @@ export default function SeederWorkspace() {
           activeEnvId: activeEnv?.id || null,
           activeEnvVariables: currentEnvVars,
           globalEnvVariables: currentGlobalVars,
+          collectionVariables: currentColVars,
           request: {
             url: currentReq.baseUrl + "/" + currentReq.endpoint,
             method: currentReq.method,
@@ -288,11 +370,15 @@ export default function SeederWorkspace() {
 
         currentEnvVars = preResult.activeEnvVariables;
         currentGlobalVars = preResult.globalEnvVariables;
+        currentColVars = preResult.collectionVariables;
 
         if (activeEnvironmentId) {
           updateEnvironment(activeEnvironmentId, { variables: currentEnvVars });
         }
         updateEnvironment("env_globals", { variables: currentGlobalVars });
+        if (activeCollectionId) {
+          updateCollectionVariables(activeCollectionId, currentColVars);
+        }
 
         if (preResult.logs.length > 0) {
           setConsoleLogs((prev) => [
@@ -345,6 +431,7 @@ export default function SeederWorkspace() {
           activeEnvId: activeEnv?.id || null,
           activeEnvVariables: currentEnvVars,
           globalEnvVariables: currentGlobalVars,
+          collectionVariables: currentColVars,
           request: {
             url: currentReq.baseUrl + "/" + currentReq.endpoint,
             method: currentReq.method,
@@ -365,11 +452,15 @@ export default function SeederWorkspace() {
 
         currentEnvVars = postResult.activeEnvVariables;
         currentGlobalVars = postResult.globalEnvVariables;
+        currentColVars = postResult.collectionVariables;
 
         if (activeEnvironmentId) {
           updateEnvironment(activeEnvironmentId, { variables: currentEnvVars });
         }
         updateEnvironment("env_globals", { variables: currentGlobalVars });
+        if (activeCollectionId) {
+          updateCollectionVariables(activeCollectionId, currentColVars);
+        }
 
         scriptTestResults = postResult.testResults.map((tr) => ({
           id: `script_assert_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -1054,12 +1145,26 @@ export default function SeederWorkspace() {
 
                             {/* Expected Value Input */}
                             {assert.operator !== "exists" && (
-                              <Input
+                              <AutoComplete
                                 value={assert.value}
                                 size="small"
                                 placeholder="Expected value"
-                                onChange={(e) => handleUpdateAssertion(assert.id, { value: e.target.value })}
+                                onChange={(v) => handleUpdateAssertion(assert.id, { value: v })}
                                 className="flex-1 min-w-[80px]"
+                                options={[
+                                  { value: "true" },
+                                  { value: "false" },
+                                  { value: "null" },
+                                  { value: "0" },
+                                  { value: "1" },
+                                  { value: "200" },
+                                  { value: "201" },
+                                  { value: "400" },
+                                  { value: "401" },
+                                  { value: "403" },
+                                  { value: "404" },
+                                  { value: "500" },
+                                ].filter((o) => !assert.value || o.value.startsWith(assert.value))}
                               />
                             )}
 
@@ -1090,93 +1195,123 @@ export default function SeederWorkspace() {
                   </span>
                 ),
                 children: (
-                  <div className="p-4 h-full overflow-y-auto space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase tracking-wider">
-                          Pre-request Script (JavaScript)
-                        </p>
-                        <span className="text-[9px] text-slate-400 font-medium">Runs before template resolution</span>
+                  <div className="flex h-full overflow-hidden">
+                    {/* ── Left: Editors + Console ── */}
+                    <div className="flex-1 min-w-0 overflow-y-auto p-4 space-y-4">
+                      {/* Pre-request Script */}
+                      <div
+                        className={`rounded-xl p-0.5 transition-all duration-200 ${focusedScript === "pre" ? "ring-2 ring-amber-400/60 bg-amber-400/5" : "ring-1 ring-slate-500/10 dark:ring-white/[0.06]"}`}
+                        onClick={() => setFocusedScript("pre")}
+                      >
+                        <div className="flex items-center justify-between px-2 pt-2 pb-1.5">
+                          <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${focusedScript === "pre" ? "text-amber-400" : "text-slate-500 dark:text-slate-450"}`}>
+                            Pre-request Script (JavaScript)
+                          </p>
+                          <span className="text-[9px] text-slate-400 font-medium">Runs before template resolution</span>
+                        </div>
+                        <Input.TextArea
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          ref={preScriptRef as any}
+                          value={activeReq.preRequestScript || ""}
+                          onFocus={() => setFocusedScript("pre")}
+                          onChange={(e) => handleUpdate({ preRequestScript: e.target.value })}
+                          placeholder={`// Pre-request Script\n// Example: be.environment.set("timestamp", Date.now().toString());`}
+                          autoSize={{ minRows: 5, maxRows: 10 }}
+                          className="font-mono text-xs dark:bg-[#0c0d16] dark:border-white/10 dark:text-emerald-400 !border-0 !shadow-none !rounded-t-none"
+                        />
                       </div>
-                      <Input.TextArea
-                        value={activeReq.preRequestScript || ""}
-                        onChange={(e) => handleUpdate({ preRequestScript: e.target.value })}
-                        placeholder={`// Pre-request Script\n// Example: be.environment.set("timestamp", Date.now().toString());`}
-                        autoSize={{ minRows: 5, maxRows: 10 }}
-                        className="font-mono text-xs dark:bg-[#0c0d16] dark:border-white/10 dark:text-emerald-400"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase tracking-wider">
-                          Post-response Script / Tests (JavaScript)
-                        </p>
-                        <span className="text-[9px] text-slate-400 font-medium">Runs after response is received</span>
+
+                      {/* Post-response Script */}
+                      <div
+                        className={`rounded-xl p-0.5 transition-all duration-200 ${focusedScript === "post" ? "ring-2 ring-sky-400/60 bg-sky-400/5" : "ring-1 ring-slate-500/10 dark:ring-white/[0.06]"}`}
+                        onClick={() => setFocusedScript("post")}
+                      >
+                        <div className="flex items-center justify-between px-2 pt-2 pb-1.5">
+                          <p className={`text-[10px] font-bold uppercase tracking-wider transition-colors ${focusedScript === "post" ? "text-sky-400" : "text-slate-500 dark:text-slate-450"}`}>
+                            Post-response Script / Tests (JavaScript)
+                          </p>
+                          <span className="text-[9px] text-slate-400 font-medium">Runs after response is received</span>
+                        </div>
+                        <Input.TextArea
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          ref={postScriptRef as any}
+                          value={activeReq.postResponseScript || ""}
+                          onFocus={() => setFocusedScript("post")}
+                          onChange={(e) => handleUpdate({ postResponseScript: e.target.value })}
+                          placeholder={`// Post-response Script / Tests\n// Example:\n// be.test("Status is 200", () => {\n//   be.response.to.have.status(200);\n// });`}
+                          autoSize={{ minRows: 5, maxRows: 10 }}
+                          className="font-mono text-xs dark:bg-[#0c0d16] dark:border-white/10 dark:text-emerald-400 !border-0 !shadow-none !rounded-t-none"
+                        />
                       </div>
-                      <Input.TextArea
-                        value={activeReq.postResponseScript || ""}
-                        onChange={(e) => handleUpdate({ postResponseScript: e.target.value })}
-                        placeholder={`// Post-response Script / Tests\n// Example:\n// be.test("Status is 200", () => {\n//   be.response.to.have.status(200);\n// });\n// be.environment.set("userId", be.response.json().id);`}
-                        autoSize={{ minRows: 5, maxRows: 10 }}
-                        className="font-mono text-xs dark:bg-[#0c0d16] dark:border-white/10 dark:text-emerald-400"
-                      />
                     </div>
 
-                    {/* Console Output */}
-                    <div className="rounded-xl border border-slate-500/10 dark:border-white/[0.06] overflow-hidden">
-                      <div className="flex items-center justify-between px-3 py-2 bg-slate-500/5 dark:bg-white/[0.02] border-b border-slate-500/10 dark:border-white/[0.05]">
-                        <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase tracking-wider flex items-center gap-1.5">
-                          <FiTerminal className="w-3 h-3 text-emerald-500" />
-                          Console Output
-                          {consoleLogs.length > 0 && (
-                            <span className="text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded-full">
-                              {consoleLogs.length}
-                            </span>
-                          )}
+                    {/* ── Right: Snippets Panel ── */}
+                    <div className="w-52 shrink-0 border-l border-slate-500/10 dark:border-white/[0.07] flex flex-col overflow-hidden bg-slate-500/[0.015] dark:bg-white/[0.008]">
+                      {/* Panel header */}
+                      <div className="px-3 py-3 border-b border-slate-500/10 dark:border-white/[0.06] shrink-0 space-y-2">
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <FiCode className="w-3 h-3 text-indigo-500" /> Snippets
                         </p>
-                        {consoleLogs.length > 0 && (
+                        <div className="flex gap-1.5">
                           <button
                             type="button"
-                            onClick={() => setConsoleLogs([])}
-                            className="flex items-center gap-1 text-[9px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                            onClick={() => setFocusedScript("pre")}
+                            className={`flex-1 text-[9px] font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer ${focusedScript === "pre"
+                              ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                              : "bg-transparent border-slate-500/15 dark:border-white/[0.07] text-slate-500 hover:border-amber-500/30 hover:text-amber-400"}`}
                           >
-                            <FiTrash2 className="w-2.5 h-2.5" />
-                            Clear
+                            Pre-request
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => setFocusedScript("post")}
+                            className={`flex-1 text-[9px] font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer ${focusedScript === "post"
+                              ? "bg-sky-500/15 border-sky-500/40 text-sky-400"
+                              : "bg-transparent border-slate-500/15 dark:border-white/[0.07] text-slate-500 hover:border-sky-500/30 hover:text-sky-400"}`}
+                          >
+                            Post-response
+                          </button>
+                        </div>
                       </div>
-                      <div className="bg-slate-950/95 min-h-[80px] max-h-[180px] overflow-y-auto p-3 font-mono text-[11px] space-y-1">
-                        {consoleLogs.length === 0 ? (
-                          <p className="text-slate-600 italic select-none">
-                            {`// console.log() output will appear here after running`}
-                          </p>
-                        ) : (
-                          consoleLogs.map((entry, idx) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-1 py-0.5 rounded mt-0.5 ${entry.source === "pre"
-                                ? "bg-amber-500/15 text-amber-400"
-                                : "bg-sky-500/15 text-sky-400"
-                                }`}>
-                                {entry.source === "pre" ? "PRE" : "POST"}
-                              </span>
-                              <span className="text-emerald-300 break-all">{entry.text}</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Quick Reference */}
-                    <div className="bg-slate-500/5 dark:bg-white/[0.02] border border-slate-500/10 dark:border-white/[0.05] rounded-xl p-3 text-xs space-y-2">
-                      <p className="font-bold text-slate-700 dark:text-slate-350 flex items-center gap-1">
-                        <FiCode className="text-indigo-500" /> Scripting Quick Reference
-                      </p>
-                      <ul className="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
-                        <li><code className="font-mono bg-slate-500/10 dark:bg-white/5 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">{"be.environment.set(\"key\", \"value\")"}</code>: Set env variable</li>
-                        <li><code className="font-mono bg-slate-500/10 dark:bg-white/5 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">{"be.environment.get(\"key\")"}</code>: Get env variable</li>
-                        <li><code className="font-mono bg-slate-500/10 dark:bg-white/5 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">{"be.response.json()"}</code>: Parse JSON response data</li>
-                        <li><code className="font-mono bg-slate-500/10 dark:bg-white/5 px-1 py-0.5 rounded text-indigo-600 dark:text-indigo-400">{"be.test(\"name\", () => { ... })"}</code>: Define a custom test case</li>
-                      </ul>
+                      {/* Snippet list */}
+                      <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
+                        {SCRIPT_SNIPPETS.map((group, gi) => (
+                          <div key={group.category}>
+                            {gi > 0 && (
+                              <div className="mx-3 my-2.5 border-t border-slate-500/10 dark:border-white/[0.06]" />
+                            )}
+                            {/* Category badge */}
+                            <div className="px-3 pb-1.5 pt-1">
+                              <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-md text-[9px] font-black uppercase tracking-widest bg-indigo-500/10 dark:bg-indigo-500/15 border border-indigo-500/20 dark:border-indigo-500/25 text-indigo-600 dark:text-indigo-400">
+                                {group.category}
+                              </span>
+                            </div>
+                            {/* Snippet items */}
+                            {group.items.map((snippet) => {
+                              const isActive = lastClickedSnippet === snippet.label;
+                              return (
+                                <button
+                                  key={snippet.label}
+                                  type="button"
+                                  onClick={() => {
+                                    insertSnippet(snippet.code);
+                                    setLastClickedSnippet(snippet.label);
+                                    setTimeout(() => setLastClickedSnippet(null), 800);
+                                  }}
+                                  className={`w-full text-left flex items-center gap-2 px-3 py-[7px] border-l-2 text-[11.5px] font-medium transition-all cursor-pointer ${isActive
+                                    ? "border-l-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
+                                    : "border-l-transparent text-slate-600 dark:text-slate-300 hover:border-l-indigo-400/50 hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.025] hover:text-slate-900 dark:hover:text-white"
+                                    }`}
+                                >
+                                  <span className={`text-[10px] leading-none shrink-0 ${isActive ? "text-indigo-500" : "text-slate-400 dark:text-slate-500"}`}>›</span>
+                                  {snippet.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ),
@@ -1185,7 +1320,7 @@ export default function SeederWorkspace() {
                 key: "seed",
                 label: (
                   <span className="flex items-center gap-1.5">
-                    Seeding / Load Options
+                    Runner Config
                     {(activeReq.seedMode === "items" || activeReq.repeatCount > 1) && (
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                     )}
@@ -1382,6 +1517,37 @@ export default function SeederWorkspace() {
             tabBarStyle={{ marginBottom: 0 }}
             items={[
               {
+                key: "headers",
+                label: "Headers",
+                children: lastResponse ? (
+                  <div className="p-4 h-full overflow-y-auto space-y-2">
+                    <div className="border border-slate-500/10 dark:border-white/[0.05] rounded-xl overflow-hidden">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-500/5 dark:bg-white/[0.02] border-b border-slate-500/10 dark:border-white/[0.05] text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase tracking-wider">
+                            <th className="px-4 py-2">Header Name</th>
+                            <th className="px-4 py-2">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-500/5 dark:divide-white/[0.03]">
+                          {Object.entries(lastResponse.headers).map(([k, v]) => (
+                            <tr key={k} className="hover:bg-slate-500/[0.01] dark:hover:bg-white/[0.005]">
+                              <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400 font-bold">{k}</td>
+                              <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-300 break-all">{v}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-8 text-slate-500">
+                    <FiTerminal className="w-8 h-8 opacity-25 mb-3" />
+                    <p className="text-xs font-semibold">No Response Yet</p>
+                  </div>
+                ),
+              },
+              {
                 key: "body",
                 label: "Body",
                 children: lastResponse ? (
@@ -1428,37 +1594,6 @@ export default function SeederWorkspace() {
                     <FiTerminal className="w-8 h-8 opacity-25 mb-3" />
                     <p className="text-xs font-semibold">No Response Yet</p>
                     <p className="text-[10px] text-center max-w-[220px] mt-0.5">Execute a request to see the response here.</p>
-                  </div>
-                ),
-              },
-              {
-                key: "headers",
-                label: "Headers",
-                children: lastResponse ? (
-                  <div className="p-4 h-full overflow-y-auto space-y-2">
-                    <div className="border border-slate-500/10 dark:border-white/[0.05] rounded-xl overflow-hidden">
-                      <table className="w-full text-xs text-left border-collapse">
-                        <thead>
-                          <tr className="bg-slate-500/5 dark:bg-white/[0.02] border-b border-slate-500/10 dark:border-white/[0.05] text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase tracking-wider">
-                            <th className="px-4 py-2">Header Name</th>
-                            <th className="px-4 py-2">Value</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-500/5 dark:divide-white/[0.03]">
-                          {Object.entries(lastResponse.headers).map(([k, v]) => (
-                            <tr key={k} className="hover:bg-slate-500/[0.01] dark:hover:bg-white/[0.005]">
-                              <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-400 font-bold">{k}</td>
-                              <td className="px-4 py-2 font-mono text-slate-800 dark:text-slate-300 break-all">{v}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-8 text-slate-500">
-                    <FiTerminal className="w-8 h-8 opacity-25 mb-3" />
-                    <p className="text-xs font-semibold">No Response Yet</p>
                   </div>
                 ),
               },

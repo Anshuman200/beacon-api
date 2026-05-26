@@ -1,11 +1,14 @@
 "use client";
-import { Button, Tooltip, Segmented, Select } from "antd";
+import Image from "next/image";
+import { Button, Tooltip, Select, App } from "antd";
 import { FiRotateCcw, FiSun, FiMoon, FiMonitor, FiHelpCircle, FiLayers, FiSettings } from "react-icons/fi";
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore } from "@/store/collectionStore";
 import type { AppTheme } from "@/store/seederStore";
 
 export default function Header() {
+  const { modal } = App.useApp();
+
   const {
     theme,
     setTheme,
@@ -29,14 +32,18 @@ export default function Header() {
         <div className="flex items-center gap-4">
           <div className="relative w-9 h-9 shrink-0 select-none">
             {/* Cyan glow background */}
-            <div className="absolute inset-0 rounded-xl bg-cyan-500 opacity-40 blur-lg" />
+            <div className="absolute inset-0 rounded-xl bg-cyan-500 opacity-45 blur-lg animate-pulse" style={{ animationDuration: "3s" }} />
             {/* Glassmorphic squircle */}
-            <div className="relative w-9 h-9 rounded-xl bg-[#090b11]/90 border border-cyan-500/35 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              {/* Neon circular ring */}
-              <div className="absolute w-[28px] h-[28px] rounded-full border-2 border-cyan-400/80 shadow-[0_0_8px_rgba(34,211,238,0.5)] flex items-center justify-center">
-                {/* Bold white B. text */}
-                <span className="text-xs font-black text-white leading-none font-sans translate-x-[0.5px]">B.</span>
-              </div>
+            <div className="relative w-9 h-9 rounded-xl bg-[#090b11]/90 border border-cyan-500/35 flex items-center justify-center shadow-lg shadow-cyan-500/20 overflow-hidden">
+              <Image
+                src="/BeaconAPI.png"
+                alt="Beacon API Logo"
+                width={36}
+                height={36}
+                priority
+                unoptimized
+                className="object-cover rounded-xl"
+              />
             </div>
           </div>
           <div>
@@ -102,24 +109,50 @@ export default function Header() {
               type="text"
               icon={<FiRotateCcw className="w-3.5 h-3.5" />}
               disabled={isRunning}
-              onClick={triggerReset}
-              className="text-slate-550 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-405 text-xs flex items-center border border-slate-500/10 dark:border-white/5 rounded-lg px-2.5 py-1.5 hover:bg-slate-500/5"
+              onClick={() => {
+                modal.confirm({
+                  title: "Reset workspace?",
+                  content: "This will permanently delete all collections, requests, environments, and history. This cannot be undone.",
+                  okText: "Reset Everything",
+                  okButtonProps: { danger: true },
+                  cancelText: "Cancel",
+                  centered: true,
+                  onOk: triggerReset,
+                });
+              }}
+              className="text-slate-550 dark:text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 text-xs flex items-center border border-slate-500/10 dark:border-white/5 rounded-lg px-2.5 py-1.5 hover:bg-rose-500/5 hover:border-rose-500/20"
             >
               Reset All
             </Button>
           </Tooltip>
 
-          {/* Theme Selector */}
-          <Segmented
-            value={theme}
-            onChange={(value) => setTheme(value as AppTheme)}
-            options={[
-              { value: "light", icon: <FiSun className="w-3.5 h-3.5 inline-block align-middle" /> },
-              { value: "dark", icon: <FiMoon className="w-3.5 h-3.5 inline-block align-middle" /> },
-              { value: "system", icon: <FiMonitor className="w-3.5 h-3.5 inline-block align-middle" /> },
-            ]}
-            className="bg-slate-500/5 border border-slate-500/10 dark:bg-white/[0.02] dark:border-white/[0.05]"
-          />
+          {/* Theme Toggle */}
+          {(() => {
+            const order: AppTheme[] = ["light", "dark", "system"];
+            const icons: Record<AppTheme, React.ReactNode> = {
+              light: <FiSun className="w-[15px] h-[15px]" />,
+              dark: <FiMoon className="w-[15px] h-[15px]" />,
+              system: <FiMonitor className="w-[15px] h-[15px]" />,
+            };
+            const labels: Record<AppTheme, string> = {
+              light: "Light",
+              dark: "Dark",
+              system: "System",
+            };
+            return (
+              <Tooltip title={`${labels[theme]} theme — click to switch`}>
+                <button
+                  type="button"
+                  onClick={() => setTheme(order[(order.indexOf(theme) + 1) % order.length])}
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100/80 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] hover:bg-slate-200 dark:hover:bg-white/[0.09] hover:border-slate-300 dark:hover:border-white/[0.15] transition-all duration-200 cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                >
+                  <span key={theme} className="theme-icon-pop flex items-center justify-center">
+                    {icons[theme]}
+                  </span>
+                </button>
+              </Tooltip>
+            );
+          })()}
 
           {/* Help Button */}
           <Tooltip title="Help & Tour">

@@ -65,6 +65,7 @@ export interface Collection {
   id: string;
   name: string;
   requests: ApiRequest[];
+  variables: KeyValuePair[];
 }
 
 export interface Environment {
@@ -139,7 +140,7 @@ export const createDefaultRequest = (id: string, name = "New Request"): ApiReque
   delay: 100,
   jsonItems: "[]",
   preRequestScript: "",
-  postResponseScript: `const response = be.response.json();\nconsole.log("response is :- ", response);`,
+  postResponseScript: `const body = be.response.json();\nconsole.log("response is :- ", body);`,
 });
 
 interface CollectionStore {
@@ -150,6 +151,7 @@ interface CollectionStore {
   addCollection: (name?: string) => string;
   renameCollection: (id: string, name: string) => void;
   deleteCollection: (id: string) => void;
+  updateCollectionVariables: (collectionId: string, variables: KeyValuePair[]) => void;
 
   // Requests (nested within collections)
   activeRequestId: string | null;
@@ -183,7 +185,7 @@ const DEFAULT_REQUEST_ID = "req_default";
 const buildInitialState = () => {
   const defaultReq = createDefaultRequest(DEFAULT_REQUEST_ID, "Default Request");
   return {
-    collections: [{ id: DEFAULT_COLLECTION_ID, name: "My Collection", requests: [defaultReq] }],
+    collections: [{ id: DEFAULT_COLLECTION_ID, name: "My Collection", requests: [defaultReq], variables: [] }],
     activeCollectionId: DEFAULT_COLLECTION_ID,
     activeRequestId: DEFAULT_REQUEST_ID,
     environments: [{ id: "env_globals", name: "Globals", variables: [] }],
@@ -205,7 +207,7 @@ export const useCollectionStore = create<CollectionStore>()(
         set((state) => {
           const colName = name || `Collection ${state.collections.length + 1}`;
           return {
-            collections: [...state.collections, { id, name: colName, requests: [] }],
+            collections: [...state.collections, { id, name: colName, requests: [], variables: [] }],
             activeCollectionId: id,
           };
         });
@@ -231,6 +233,10 @@ export const useCollectionStore = create<CollectionStore>()(
           activeRequestId: nextActiveRequestId,
         };
       }),
+
+      updateCollectionVariables: (collectionId, variables) => set((state) => ({
+        collections: state.collections.map((c) => c.id === collectionId ? { ...c, variables } : c),
+      })),
 
       // ── Requests ──
       setActiveRequestId: (activeRequestId) => set({ activeRequestId }),
@@ -358,7 +364,8 @@ export const useCollectionStore = create<CollectionStore>()(
           removeItem: (name) => localStorage.removeItem(name),
         };
       }),
-      migrate: (persistedState: unknown) => {
+      version: 1,
+      migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown> | null;
         if (!state || typeof state !== "object") return buildInitialState();
 
@@ -370,6 +377,7 @@ export const useCollectionStore = create<CollectionStore>()(
             id: DEFAULT_COLLECTION_ID,
             name: colName,
             requests: oldRequests.length > 0 ? oldRequests : [createDefaultRequest(DEFAULT_REQUEST_ID, "Default Request")],
+            variables: [],
           };
           const { requests: _r, collectionName: _cn, ...rest } = state as Record<string, unknown>;
           void _r; void _cn;
@@ -380,6 +388,14 @@ export const useCollectionStore = create<CollectionStore>()(
             activeRequestId: (rest.activeRequestId as string | undefined) || col.requests[0].id,
           };
           return migrated as unknown as CollectionStore;
+        }
+
+        // v0 → v1: backfill `variables: []` on any collection that's missing it
+        if (fromVersion < 1 && Array.isArray(state.collections)) {
+          state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => ({
+            ...col,
+            variables: (col.variables as KeyValuePair[] | undefined) ?? [],
+          }));
         }
 
         // Ensure at least one collection with at least one request

@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite",
   description: "A beautiful tool to test and seed data through API endpoints with sandboxed scripting",
+  icons: {
+    icon: "/BeaconAPI.png",
+    shortcut: "/BeaconAPI.png",
+    apple: "/BeaconAPI.png",
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +29,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} min-h-dvh antialiased`}>
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} min-h-dvh antialiased`}>
+      <head>
+        {/* Blocking theme script — runs before paint to prevent flash */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){
+            try {
+              var t = localStorage.getItem('beacon-theme') || 'system';
+              var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+              if (dark) document.documentElement.classList.add('dark');
+            } catch(e){}
+          })();
+        `}} />
+      </head>
       <body className="h-dvh flex flex-col overflow-hidden antialiased">
         <Providers>
           {children}
