@@ -90,6 +90,8 @@ interface RunState {
     assertions: AssertionResult[];
     passed: boolean;
   } | null;
+  /** Bumped once each time this request's execution naturally finishes (completed or aborted mid-run) — lets SecurityPanel auto-run its safe checks without polling. */
+  completedSignal: number;
 }
 
 const DEFAULT_RUN_STATE: RunState = {
@@ -97,6 +99,7 @@ const DEFAULT_RUN_STATE: RunState = {
   progress: { sent: 0, total: 0, succeeded: 0, failed: 0, logs: [] },
   consoleLogs: [],
   lastResponse: null,
+  completedSignal: 0,
 };
 
 export default function SeederWorkspace() {
@@ -613,7 +616,7 @@ export default function SeederWorkspace() {
       }
     }
 
-    updateRunState(requestId, { isRunning: false });
+    updateRunState(requestId, (prev) => ({ isRunning: false, completedSignal: prev.completedSignal + 1 }));
 
     // Confetti on success
     if (localFail === 0 && localSuccess > 0) {
@@ -1467,6 +1470,12 @@ export default function SeederWorkspace() {
               },
               {
                 key: "security",
+                // Security's auto-scan-on-Execute effect needs to be mounted
+                // and listening from the start — antd only lazily mounts a
+                // tab's content on first activation otherwise, so a tester
+                // who never manually opens this tab would never get an
+                // automatic scan at all.
+                forceRender: true,
                 label: (
                   <span className="flex items-center gap-1.5">
                     Security
@@ -1484,6 +1493,7 @@ export default function SeederWorkspace() {
                     onUpdateAuthMatrixBaseline={(authMatrixBaseline) => handleUpdate({ security: { ...activeReq.security, authMatrixBaseline } })}
                     resultsDrawerOpen={securityResultsDrawerOpen}
                     onResultsDrawerOpenChange={setSecurityResultsDrawerOpen}
+                    autoScanSignal={activeRunState.completedSignal}
                   />
                 ),
               },

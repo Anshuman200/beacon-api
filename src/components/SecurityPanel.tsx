@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button, Select, Input, Checkbox, Tooltip, Collapse } from "antd";
 import { FiShield, FiAlertTriangle, FiCheckCircle, FiInfo, FiPlay, FiLock, FiUnlock, FiZap, FiUploadCloud, FiUsers, FiGlobe, FiDownload } from "react-icons/fi";
 import { ApiRequest, OwaspApiCategory, OwaspChecklistItem, AuthMatrixSnapshot } from "@/store/collectionStore";
@@ -94,6 +94,8 @@ interface Props {
   /** Controlled from SeederWorkspace so "View Results" can live in the always-visible metrics bar instead of inside this tab. */
   resultsDrawerOpen: boolean;
   onResultsDrawerOpenChange: (open: boolean) => void;
+  /** Bumped by SeederWorkspace each time this request's own Execute run finishes — triggers the safe checks automatically, no click required. */
+  autoScanSignal: number;
 }
 
 export default function SecurityPanel({
@@ -103,6 +105,7 @@ export default function SecurityPanel({
   onUpdateChecklist,
   onUpdateAuthMatrixBaseline,
   resultsDrawerOpen,
+  autoScanSignal,
   onResultsDrawerOpenChange,
 }: Props) {
   const [responseFindings, setResponseFindings] = useState<SecurityFinding[]>([]);
@@ -279,24 +282,48 @@ export default function SecurityPanel({
   // wanting the full payload set can still run Active Probes manually.
   const AUTO_PROBE_CATEGORIES: ProbeCategory[] = ["sqli", "xss"];
 
+  /**
+   * The always-safe subset of a full scan: passive response analysis, the
+   * four hygiene/auth helpers, and the Authorization Matrix. None of these
+   * send attack-shaped payloads, so — unlike Active Probes / File Upload
+   * Probes — they're safe to run with no explicit consent, including fully
+   * automatically after every Execute (see the autoScanSignal effect below).
+   */
+  const runSafeChecks = async (response: NonNullable<typeof lastResponse> | null) => {
+    const analysis = response ? computeResponseFindings(response) : [];
+    if (response) {
+      setResponseFindings(analysis);
+      setAnalyzed(true);
+    }
+
+    const [withoutAuth, malformedToken, unexpectedMethod, contentType] = await Promise.all([
+      testWithoutAuth(request, onSend),
+      testWithMalformedToken(request, onSend),
+      testUnexpectedMethod(request, onSend),
+      testContentTypeHandling(request, onSend),
+    ]);
+    setWithoutAuthFindings(withoutAuth);
+    setMalformedTokenFindings(malformedToken);
+    setUnexpectedMethodFindings(unexpectedMethod);
+    setContentTypeFindings(contentType);
+
+    // Auto-run the Authorization Matrix with whatever profiles already exist
+    // (Anonymous works with zero setup) — handled by AuthMatrixSection.
+    setMatrixRunSignal((n) => n + 1);
+
+    setActiveKeys((prev) => Array.from(new Set([...prev, "analysis", "auth-helpers", "auth-matrix"])));
+    setFullScanRan(true);
+
+    return { analysis, withoutAuth, malformedToken, unexpectedMethod, contentType };
+  };
+
   const handleRunFullScan = async () => {
     setFullScanRunning(true);
     try {
       // Works even if the request has never been executed yet — this call
       // sends it fresh, so "set the URL and endpoint" really is enough.
       const response = await onSend(request);
-      const analysis = computeResponseFindings(response);
-      setResponseFindings(analysis);
-      setAnalyzed(true);
-
-      const withoutAuth = await testWithoutAuth(request, onSend);
-      const malformedToken = await testWithMalformedToken(request, onSend);
-      const unexpectedMethod = await testUnexpectedMethod(request, onSend);
-      const contentType = await testContentTypeHandling(request, onSend);
-      setWithoutAuthFindings(withoutAuth);
-      setMalformedTokenFindings(malformedToken);
-      setUnexpectedMethodFindings(unexpectedMethod);
-      setContentTypeFindings(contentType);
+      const { analysis, withoutAuth, malformedToken, unexpectedMethod, contentType } = await runSafeChecks(response);
 
       let activeFindings: SecurityFinding[] = [];
       let fileFindings: SecurityFinding[] = [];
@@ -328,12 +355,7 @@ export default function SecurityPanel({
         }
       }
 
-      // Auto-run the Authorization Matrix with whatever profiles already
-      // exist (Anonymous works with zero setup) — handled by AuthMatrixSection.
-      setMatrixRunSignal((n) => n + 1);
-
-      setActiveKeys((prev) => Array.from(new Set([...prev, "analysis", "auth-helpers", "probes", "file-probes", "auth-matrix"])));
-      setFullScanRan(true);
+      setActiveKeys((prev) => Array.from(new Set([...prev, "probes", "file-probes"])));
       onResultsDrawerOpenChange(true);
 
       const totalIssues = [...analysis, ...withoutAuth, ...malformedToken, ...unexpectedMethod, ...contentType, ...activeFindings, ...fileFindings]
@@ -347,6 +369,32 @@ export default function SecurityPanel({
       setFullScanRunning(false);
     }
   };
+
+  // Automatically runs the safe checks the instant this request's own Execute
+  // finishes — no click required. Guarded so it only fires on a genuine
+  // completion of *this* request (same id, signal actually changed), never on
+  // mount or when switching tabs to a request that already has a higher count.
+  const prevAutoScanRef = useRef<{ requestId: string; signal: number } | null>(null);
+  useEffect(() => {
+    const prev = prevAutoScanRef.current;
+    const isGenuineCompletion = !!prev && prev.requestId === request.id && prev.signal !== autoScanSignal;
+    prevAutoScanRef.current = { requestId: request.id, signal: autoScanSignal };
+    if (!isGenuineCompletion) return;
+
+    (async () => {
+      try {
+        const { withoutAuth, malformedToken, unexpectedMethod, contentType, analysis } = await runSafeChecks(lastResponse);
+        const totalIssues = [...analysis, ...withoutAuth, ...malformedToken, ...unexpectedMethod, ...contentType]
+          .filter((f) => f.severity !== "info").length;
+        toast[totalIssues > 0 ? "warning" : "success"](
+          totalIssues > 0 ? `Auto security check found ${totalIssues} potential issue(s)` : "Auto security check found no issues"
+        );
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Automatic security check failed");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScanSignal, request.id]);
 
   // Maps each category's real automated signal to a hint count. Deliberately
   // conservative: only categories with findings that actually speak to that

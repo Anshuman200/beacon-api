@@ -1,5 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios, { AxiosError } from "axios";
+import net from "node:net";
+import { checkEgressAllowed, EgressBlockReason } from "@/lib/egressGuard";
+
+/**
+ * Thrown when a target (the initial URL or a redirect hop) fails the egress
+ * guard — caught specially in the route handler to return a structured 400
+ * instead of the generic 500 used for upstream request failures.
+ */
+class EgressBlockedError extends Error {
+  reason: EgressBlockReason;
+  constructor(reason: EgressBlockReason, message: string) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
+/**
+ * Pins the actual TCP connection to the exact IP(s) already validated by the
+ * egress guard, instead of letting Node re-resolve the hostname when it
+ * connects. Without this, a DNS-rebinding attacker could return a safe IP for
+ * our check and a private one moments later for the real connection — the
+ * `lookup` option is honored by Node's http/https client for the connection
+ * itself, while TLS SNI/cert validation still uses the original hostname, so
+ * this is transparent for legitimate targets.
+ */
+type LookupAddress = { address: string; family: 4 | 6 };
+type LookupCallback = (err: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: 4 | 6) => void;
+
+function familyOf(address: string): 4 | 6 {
+  return net.isIP(address) === 6 ? 6 : 4;
+}
+
+function pinnedLookup(validatedIps: string[]) {
+  return (hostname: string, options: { all?: boolean } | LookupCallback, callback?: LookupCallback) => {
+    const cb = typeof options === "function" ? options : callback!;
+    const wantsAll = typeof options === "object" && !!options.all;
+    if (wantsAll) {
+      cb(null, validatedIps.map((address) => ({ address, family: familyOf(address) })));
+    } else {
+      const address = validatedIps[0];
+      cb(null, address, familyOf(address));
+    }
+  };
+}
 
 // ── Recursively follow redirects while preserving the HTTP method ──────────────
 // axios (and browsers) convert POST → GET on 301/302 redirects (RFC 7231 §6.4).
@@ -19,6 +63,14 @@ async function makeRequest(
 }> {
   const redirectChain: string[] = [];
 
+  // Re-run on every hop (this function recurses per redirect below), not just
+  // the first request — an SSRF guard that only checks the initial URL is
+  // trivially bypassed by a 302 to an internal address.
+  const guard = await checkEgressAllowed(url);
+  if (!guard.allowed) {
+    throw new EgressBlockedError(guard.reason!, guard.message || "Target address is not allowed.");
+  }
+
   const response = await axios({
     method,
     url,
@@ -30,6 +82,7 @@ async function makeRequest(
     validateStatus: () => true, // never throw on HTTP errors
     maxRedirects: 0,            // we handle redirects ourselves
     decompress: true,
+    lookup: pinnedLookup(guard.resolvedIps!),
   });
 
   // ── Follow redirect preserving method ─────────────────────────────────────
@@ -193,6 +246,13 @@ export async function POST(req: NextRequest) {
       responseTime : responseTime,
     });
   } catch (err) {
+    if (err instanceof EgressBlockedError) {
+      const responseTime = Date.now() - startTime;
+      return NextResponse.json(
+        { error: err.message, code: err.reason, responseTime },
+        { status: 400 }
+      );
+    }
     const e = err as AxiosError;
     const responseTime = Date.now() - startTime;
     return NextResponse.json(
