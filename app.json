@@ -1,0 +1,26 @@
+{
+  "name": "Beacon API",
+  "shortName": "Beacon API",
+  "title": "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite",
+  "tagline": "Advanced Client, Sandboxed Testing & Scripting Suite",
+  "description": "Beacon API is a client-only workbench for testing, seeding, and securing your APIs — with sandboxed scripting, OpenAPI import, and automated security scans.",
+  "author": {
+    "name": "Ansh Singh",
+    "email": "ansh.official03@gmail.com"
+  },
+  "url": "https://main.d35klirppq94rz.amplifyapp.com",
+  "themeColor": "#040509",
+  "backgroundColor": "#040509",
+  "icons": {
+    "favicon": "/BeaconAPI.png",
+    "icon192": "/icon-192.png",
+    "icon512": "/icon-512.png",
+    "maskable512": "/icon-maskable-512.png",
+    "appleTouchIcon": "/apple-touch-icon.png",
+    "ogImage": "/og-image.png"
+  },
+  "security": {
+    "expiresInDays": 365
+  },
+  "publishedTime": "2026-05-22T00:00:00.000Z"
+}

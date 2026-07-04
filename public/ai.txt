@@ -1,0 +1,13 @@
+# ai.txt — AI crawling & training policy for Beacon API
+# (an emerging, not-yet-standardized convention; see /llms.txt for the
+# canonical AI-facing summary of this site, and /robots.txt for the
+# per-crawler rules search and AI bots actually honor today)
+
+User-agent: *
+Allow: /
+Training: allow
+Attribution: appreciated, not required
+
+# Full site summary for AI agents: /llms.txt
+# Crawl rules (search + AI bots): /robots.txt
+# Security contact: /.well-known/security.txt

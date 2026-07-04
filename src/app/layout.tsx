@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
+import { SITE_URL, SITE_TITLE, SITE_DESCRIPTION, SITE_AUTHOR, PUBLISHED_TIME, THEME_COLOR, ICONS, APP_SHORT_NAME } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,10 +14,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://main.d35klirppq94rz.amplifyapp.com";
-const SITE_TITLE = "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite";
-const SITE_DESCRIPTION = "A beautiful tool to test and seed data through API endpoints with sandboxed scripting";
-
 export const metadata: Metadata = {
   // Required so relative OG/Twitter image paths below resolve to absolute
   // URLs — link-preview crawlers (iMessage, Slack, X, etc.) won't fetch a
@@ -25,38 +22,43 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
+  authors: [{ name: SITE_AUTHOR }],
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: ICONS.icon192, sizes: "192x192", type: "image/png" },
+      { url: ICONS.icon512, sizes: "512x512", type: "image/png" },
     ],
-    shortcut: "/BeaconAPI.png",
-    apple: "/apple-touch-icon.png",
+    shortcut: ICONS.favicon,
+    apple: ICONS.appleTouchIcon,
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Beacon API",
+    title: APP_SHORT_NAME,
   },
   openGraph: {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     url: "/",
-    siteName: "Beacon API",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Beacon API" }],
-    type: "website",
+    siteName: APP_SHORT_NAME,
+    images: [{ url: ICONS.ogImage, width: 1200, height: 630, alt: APP_SHORT_NAME }],
+    // "article" (rather than "website") is what unlocks the author/publishedTime
+    // OG fields below — it's what LinkedIn's Post Inspector was asking for.
+    type: "article",
+    authors: [SITE_AUTHOR],
+    publishedTime: PUBLISHED_TIME,
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
-    images: ["/og-image.png"],
+    images: [ICONS.ogImage],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#040509",
+  themeColor: THEME_COLOR,
   width: "device-width",
   initialScale: 1,
 };

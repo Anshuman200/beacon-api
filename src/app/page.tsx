@@ -1,4 +1,5 @@
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import SeederFormLoader from "@/components/SeederFormLoader";
 
 export default function Home() {
@@ -8,6 +9,7 @@ export default function Home() {
       <main className="flex-1 lg:min-h-0 lg:flex lg:flex-col">
         <SeederFormLoader />
       </main>
+      <Footer />
     </div>
   );
 }

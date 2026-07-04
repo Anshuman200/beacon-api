@@ -5,6 +5,7 @@ import { FiRotateCcw, FiSun, FiMoon, FiHelpCircle, FiLayers, FiSettings, FiUploa
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore } from "@/store/collectionStore";
 import type { AppTheme } from "@/store/seederStore";
+import { APP_VERSION } from "@/lib/site";
 
 export default function Header() {
   const { modal } = App.useApp();
@@ -51,7 +52,7 @@ export default function Header() {
           <div>
             <div className="flex items-center gap-2.5">
               <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">Beacon API</span>
-              <span className="text-[10px] font-extrabold text-indigo-650 bg-indigo-500/10 border border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-500/15 dark:border-indigo-500/25 px-2 py-0.5 rounded-full leading-none">v2.0</span>
+              <span className="text-[10px] font-extrabold text-indigo-650 bg-indigo-500/10 border border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-500/15 dark:border-indigo-500/25 px-2 py-0.5 rounded-full leading-none">v{APP_VERSION}</span>
             </div>
             <p className="text-[11px] text-slate-550 dark:text-slate-400 mt-0.5 font-medium">Advanced Client, Sandboxed Testing &amp; Scripting Suite</p>
           </div>

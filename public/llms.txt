@@ -1,0 +1,21 @@
+# Beacon API
+
+> Beacon API is a client-only workbench for testing, seeding, and securing HTTP APIs — a Postman-style request builder combined with sandboxed request/response scripting and a built-in, honest-by-design security-analysis module. There is no backend beyond a single generic CORS-bypass proxy; all collections, environments, and history are stored locally in the browser (encrypted at rest).
+
+## What it does
+
+- Build and run HTTP requests: methods, params, headers, auth (Bearer/Basic/API key/OAuth2), bodies (JSON/urlencoded/form-data/GraphQL), and per-request assertions.
+- Import an existing Postman v2.1 collection, or an OpenAPI 3.x / Swagger 2.0 spec (by file upload or URL, including specs behind an auth-protected docs page) — auto-discovers the real spec if given a Swagger UI docs URL.
+- Sandbox pre-request and post-response scripts in an isolated Web Worker (no access to the DOM or network beyond what the platform explicitly grants).
+- Run passive and (opt-in, consent-gated) active security checks per request: response/header analysis, JWT inspection, auth/hygiene probes, an Authorization Matrix (BOLA/IDOR-style role testing), file-upload probes, and an OWASP API Security Top 10 checklist — findings never auto-pass, only auto-fail from real evidence.
+- Installable as a PWA, with automatic update detection and a changelog-aware "new version available" prompt.
+
+## Design principles
+
+- Client-only: no user data ever leaves the browser except the target API request itself, routed through an SSRF-guarded generic proxy.
+- Honest detection over false confidence: security findings are conservative by design and never claim more certainty than the underlying check supports.
+- Explicit, non-remembered consent before anything that sends attack-shaped payloads to a real endpoint.
+
+## Contact
+
+- Security reports: see /.well-known/security.txt
