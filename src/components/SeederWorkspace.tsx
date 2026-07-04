@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore, ApiRequest, Assertion, AssertionTarget, AssertionOperator, AuthType, BodyType, Environment, KeyValuePair } from "@/store/collectionStore";
 import { prepareRequest } from "@/lib/requestRunner";
@@ -76,11 +76,35 @@ interface SingleRequestResult {
   error?: string;
 }
 
+/** Execution state for one request, keyed by request id so switching tabs never bleeds another request's in-flight run into view. */
+interface RunState {
+  isRunning: boolean;
+  progress: { sent: number; total: number; succeeded: number; failed: number; logs: string[] };
+  consoleLogs: { source: "pre" | "post"; text: string }[];
+  lastResponse: {
+    status: number;
+    statusText: string;
+    responseTime: number;
+    headers: Record<string, string>;
+    data: unknown;
+    assertions: AssertionResult[];
+    passed: boolean;
+  } | null;
+}
+
+const DEFAULT_RUN_STATE: RunState = {
+  isRunning: false,
+  progress: { sent: 0, total: 0, succeeded: 0, failed: 0, logs: [] },
+  consoleLogs: [],
+  lastResponse: null,
+};
+
 export default function SeederWorkspace() {
-  const {
-    isRunning,
-    setIsRunning,
-  } = useSeederStore();
+  // This is a single shared flag across the whole app (used by RequestSidebar
+  // to disable structural actions while *anything* runs) — we only write to
+  // it here (kept in sync with per-request run state below); the per-tab
+  // `isRunning` used everywhere else in this file is a separate, derived value.
+  const { setIsRunning: setAnyRequestRunningGlobal } = useSeederStore();
 
   const {
     collections,
@@ -110,21 +134,10 @@ export default function SeederWorkspace() {
     return null;
   }, [collections, activeRequestId]);
 
-  // Console log output from pre/post scripts
-  const [consoleLogs, setConsoleLogs] = useState<{ source: "pre" | "post"; text: string }[]>([]);
   const [oauth2Loading, setOauth2Loading] = useState(false);
 
   // UI state for response display
   const [responseTab, setResponseTab] = useState<"body" | "headers" | "tests" | "codegen" | "console">("body");
-  const [lastResponse, setLastResponse] = useState<{
-    status: number;
-    statusText: string;
-    responseTime: number;
-    headers: Record<string, string>;
-    data: unknown;
-    assertions: AssertionResult[];
-    passed: boolean;
-  } | null>(null);
 
   // Lifted out of SecurityPanel so "View Results" can live in the always-visible
   // metrics bar rather than being buried inside the Security tab.
@@ -134,12 +147,38 @@ export default function SeederWorkspace() {
   const [copiedLang, setCopiedLang] = useState<string | null>(null);
   const [wrapResponse, setWrapResponse] = useState(false);
 
-  // Clear response when switching requests (reset-during-render pattern)
+  // Per-request execution state — isRunning/progress/consoleLogs/lastResponse
+  // are all keyed by request id so switching tabs mid-run shows the correct
+  // (idle) state for whichever request is now active, and a run in progress
+  // elsewhere keeps going untouched in the background.
+  const [runStates, setRunStates] = useState<Record<string, RunState>>({});
+  const abortFlags = useRef<Record<string, boolean>>({});
+
+  const updateRunState = (id: string, patch: Partial<RunState> | ((prev: RunState) => Partial<RunState>)) => {
+    setRunStates((prev) => {
+      const current = prev[id] ?? DEFAULT_RUN_STATE;
+      return { ...prev, [id]: { ...current, ...(typeof patch === "function" ? patch(current) : patch) } };
+    });
+  };
+
+  const activeRunState = (activeRequestId && runStates[activeRequestId]) || DEFAULT_RUN_STATE;
+  const isRunning = activeRunState.isRunning;
+  const seederProgress = activeRunState.progress;
+  const consoleLogs = activeRunState.consoleLogs;
+  const lastResponse = activeRunState.lastResponse;
+
+  // Keep the shared global flag (RequestSidebar's structural-action gate) in
+  // sync with "is at least one request running anywhere," not just the active one.
+  useEffect(() => {
+    setAnyRequestRunningGlobal(Object.values(runStates).some((s) => s.isRunning));
+  }, [runStates, setAnyRequestRunningGlobal]);
+
+  // Reset the response sub-tab selection when switching requests (unrelated
+  // UI preference — the actual response/console/progress data is already
+  // correctly scoped per request via runStates, no clearing needed there).
   const [lastSeenRequestId, setLastSeenRequestId] = useState(activeRequestId);
   if (lastSeenRequestId !== activeRequestId) {
     setLastSeenRequestId(activeRequestId);
-    setLastResponse(null);
-    setConsoleLogs([]);
     setResponseTab("body");
   }
 
@@ -158,16 +197,6 @@ export default function SeederWorkspace() {
     setCopiedLang(lang);
     setTimeout(() => setCopiedLang(null), 1500);
   };
-
-  const [seederProgress, setSeederProgress] = useState({
-    sent: 0,
-    total: 0,
-    succeeded: 0,
-    failed: 0,
-    logs: [] as string[],
-  });
-
-  const abortRef = useRef(false);
 
   // Script editor refs for cursor-position snippet insertion
   const preScriptRef = useRef<{ resizableTextArea?: { textArea: HTMLTextAreaElement } } | null>(null);
@@ -331,9 +360,9 @@ export default function SeederWorkspace() {
 
   const handleRunRequest = async () => {
     if (!activeReq) return;
-    setIsRunning(true);
-    abortRef.current = false;
-    setLastResponse(null);
+    const requestId = activeReq.id;
+    updateRunState(requestId, { isRunning: true, lastResponse: null });
+    abortFlags.current[requestId] = false;
 
     const isItemsMode = activeReq.seedMode === "items";
 
@@ -346,35 +375,30 @@ export default function SeederWorkspace() {
           payloads = parsed;
         } else {
           toast.error("Multiple items payload must be a non-empty JSON array");
-          setIsRunning(false);
+          updateRunState(requestId, { isRunning: false });
           return;
         }
       } catch {
         toast.error("Invalid JSON Array syntax in items payload");
-        setIsRunning(false);
+        updateRunState(requestId, { isRunning: false });
         return;
       }
     } else {
       payloads = Array(activeReq.repeatCount || 1).fill(null);
     }
 
-    setConsoleLogs([]);
-    setSeederProgress({
-      sent: 0,
-      total: payloads.length,
-      succeeded: 0,
-      failed: 0,
-      logs: [],
+    updateRunState(requestId, {
+      consoleLogs: [],
+      progress: { sent: 0, total: payloads.length, succeeded: 0, failed: 0, logs: [] },
     });
 
     let localSuccess = 0;
     let localFail = 0;
 
     for (let i = 0; i < payloads.length; i++) {
-      if (abortRef.current) {
-        setSeederProgress((prev) => ({
-          ...prev,
-          logs: ["Execution halted by user", ...prev.logs],
+      if (abortFlags.current[requestId]) {
+        updateRunState(requestId, (prev) => ({
+          progress: { ...prev.progress, logs: ["Execution halted by user", ...prev.progress.logs] },
         }));
         break;
       }
@@ -433,16 +457,12 @@ export default function SeederWorkspace() {
         }
 
         if (preResult.logs.length > 0) {
-          setConsoleLogs((prev) => [
-            ...prev,
-            ...preResult.logs.map((text) => ({ source: "pre" as const, text })),
-          ]);
-          setSeederProgress((prev) => ({
-            ...prev,
-            logs: [
-              ...preResult.logs.map((l) => `[Pre-request] ${l}`),
-              ...prev.logs,
-            ],
+          updateRunState(requestId, (prev) => ({
+            consoleLogs: [...prev.consoleLogs, ...preResult.logs.map((text) => ({ source: "pre" as const, text }))],
+            progress: {
+              ...prev.progress,
+              logs: [...preResult.logs.map((l) => `[Pre-request] ${l}`), ...prev.progress.logs],
+            },
           }));
         }
       }
@@ -526,16 +546,12 @@ export default function SeederWorkspace() {
         }));
 
         if (postResult.logs.length > 0) {
-          setConsoleLogs((prev) => [
-            ...prev,
-            ...postResult.logs.map((text) => ({ source: "post" as const, text })),
-          ]);
-          setSeederProgress((prev) => ({
-            ...prev,
-            logs: [
-              ...postResult.logs.map((l) => `[Post-response] ${l}`),
-              ...prev.logs,
-            ],
+          updateRunState(requestId, (prev) => ({
+            consoleLogs: [...prev.consoleLogs, ...postResult.logs.map((text) => ({ source: "post" as const, text }))],
+            progress: {
+              ...prev.progress,
+              logs: [...postResult.logs.map((l) => `[Post-response] ${l}`), ...prev.progress.logs],
+            },
           }));
         }
       }
@@ -549,28 +565,32 @@ export default function SeederWorkspace() {
         localFail++;
       }
 
-      setSeederProgress((prev) => ({
-        ...prev,
-        sent: i + 1,
-        succeeded: localSuccess,
-        failed: localFail,
-        logs: [
-          `#${i + 1} [${currentReq.method}] Status ${res.status} | Latency ${res.responseTime}ms | assertions: ${combinedAssertions.filter((a) => a.passed).length
-          }/${combinedAssertions.length} passed`,
-          ...prev.logs,
-        ],
+      updateRunState(requestId, (prev) => ({
+        progress: {
+          ...prev.progress,
+          sent: i + 1,
+          succeeded: localSuccess,
+          failed: localFail,
+          logs: [
+            `#${i + 1} [${currentReq.method}] Status ${res.status} | Latency ${res.responseTime}ms | assertions: ${combinedAssertions.filter((a) => a.passed).length
+            }/${combinedAssertions.length} passed`,
+            ...prev.progress.logs,
+          ],
+        },
       }));
 
       // Set output context for single request or last request
       if (i === payloads.length - 1 || payloads.length === 1) {
-        setLastResponse({
-          status: res.status,
-          statusText: res.statusText,
-          responseTime: res.responseTime,
-          headers: res.headers,
-          data: res.data,
-          assertions: combinedAssertions,
-          passed,
+        updateRunState(requestId, {
+          lastResponse: {
+            status: res.status,
+            statusText: res.statusText,
+            responseTime: res.responseTime,
+            headers: res.headers,
+            data: res.data,
+            assertions: combinedAssertions,
+            passed,
+          },
         });
 
         // Add history entry to store
@@ -593,7 +613,7 @@ export default function SeederWorkspace() {
       }
     }
 
-    setIsRunning(false);
+    updateRunState(requestId, { isRunning: false });
 
     // Confetti on success
     if (localFail === 0 && localSuccess > 0) {
@@ -606,8 +626,9 @@ export default function SeederWorkspace() {
   };
 
   const handleStopSeeder = () => {
-    abortRef.current = true;
-    setIsRunning(false);
+    if (!activeRequestId) return;
+    abortFlags.current[activeRequestId] = true;
+    updateRunState(activeRequestId, { isRunning: false });
   };
 
   const generatedCode = useMemo(() => {
@@ -2130,7 +2151,7 @@ export default function SeederWorkspace() {
                       {consoleLogs.length > 0 && (
                         <button
                           type="button"
-                          onClick={() => setConsoleLogs([])}
+                          onClick={() => activeRequestId && updateRunState(activeRequestId, { consoleLogs: [] })}
                           className="text-[9px] font-bold text-rose-500 hover:underline cursor-pointer flex items-center gap-1"
                         >
                           <FiTrash2 className="w-2.5 h-2.5" /> Clear
