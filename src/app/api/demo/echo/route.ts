@@ -42,7 +42,27 @@ export async function POST(req: NextRequest) {
     headers[key] = value;
   });
 
-  const body = await req.json().catch(() => null);
+  const contentType = req.headers.get("content-type") || "";
+  let body: unknown = null;
+  let files: Record<string, { name: string; size: number; type: string; content: string }> | undefined;
+  let form: Record<string, string> | undefined;
+
+  if (contentType.startsWith("multipart/form-data")) {
+    const formData = await req.formData().catch(() => null);
+    if (formData) {
+      files = {};
+      form = {};
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          files[key] = { name: value.name, size: value.size, type: value.type, content: await value.text() };
+        } else {
+          form[key] = value;
+        }
+      }
+    }
+  } else {
+    body = await req.json().catch(() => null);
+  }
 
   const delay = parseInt(searchParams.get("delay") || "0", 10);
   if (delay > 0 && delay <= 5000) {
@@ -56,7 +76,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       params,
       headers,
-      body,
+      ...(files || form ? { files, form } : { body }),
       timestamp: new Date().toISOString(),
     },
   });

@@ -1,5 +1,9 @@
 import { resolveTemplates } from "@/lib/variables";
-import { ApiRequest, Environment } from "@/store/collectionStore";
+import { ApiRequest, Environment, KeyValuePair } from "@/store/collectionStore";
+
+export type ResolvedFormDataEntry =
+  | { key: string; type: "text"; value: string }
+  | { key: string; type: "file"; file: File };
 
 export interface PreparedRequest {
   url: string;
@@ -15,9 +19,10 @@ export interface PreparedRequest {
 export function prepareRequest(
   req: ApiRequest,
   activeEnv: Environment | null,
-  globalsEnv: Environment | null
+  globalsEnv: Environment | null,
+  collectionVars?: KeyValuePair[]
 ): PreparedRequest {
-  const resolve = (val: string) => resolveTemplates(val, activeEnv, globalsEnv);
+  const resolve = (val: string) => resolveTemplates(val, activeEnv, globalsEnv, collectionVars);
 
   // 1. Resolve URL base and path
   const resolvedBaseUrl = resolve(req.baseUrl || "").replace(/\/$/, "");
@@ -46,7 +51,7 @@ export function prepareRequest(
 
   // 4. Resolve Auth Settings
   if (req.auth) {
-    const { type, bearerToken, basicUser, basicPass, apiKeyName, apiKeyValue, apiKeyLocation } = req.auth;
+    const { type, bearerToken, basicUser, basicPass, apiKeyName, apiKeyValue, apiKeyLocation, oauth2 } = req.auth;
     if (type === "bearer" && bearerToken) {
       resolvedHeaders["Authorization"] = `Bearer ${resolve(bearerToken)}`;
     } else if (type === "basic" && basicUser) {
@@ -61,6 +66,10 @@ export function prepareRequest(
         const connector = fullUrl.includes("?") ? "&" : "?";
         fullUrl += `${connector}${name}=${encodeURIComponent(val)}`;
       }
+    } else if (type === "oauth2" && oauth2?.accessToken) {
+      // The caller is expected to have already refreshed this via ensureOAuth2Token
+      // before calling prepareRequest — this just reads the resolved token.
+      resolvedHeaders["Authorization"] = `${oauth2.tokenType || "Bearer"} ${oauth2.accessToken}`;
     }
   }
 
@@ -80,11 +89,11 @@ export function prepareRequest(
   } else if (bodyType === "formdata" && req.body.formdata) {
     resolvedData = req.body.formdata
       .filter((fd) => fd.enabled && fd.key.trim())
-      .map((fd) => ({
-        key: resolve(fd.key),
-        value: resolve(fd.value),
-        enabled: true,
-      }));
+      .map((fd): ResolvedFormDataEntry =>
+        fd.type === "file" && fd.file
+          ? { key: resolve(fd.key), type: "file", file: fd.file }
+          : { key: resolve(fd.key), type: "text", value: resolve(fd.value) }
+      );
   } else if (bodyType === "urlencoded" && req.body.urlencoded) {
     resolvedData = req.body.urlencoded
       .filter((ue) => ue.enabled && ue.key.trim())
@@ -93,6 +102,15 @@ export function prepareRequest(
         value: resolve(ue.value),
         enabled: true,
       }));
+  } else if (bodyType === "graphql" && req.body.graphql) {
+    const query = resolve(req.body.graphql.query || "");
+    let variables: unknown = {};
+    try {
+      variables = JSON.parse(resolve(req.body.graphql.variables || "{}"));
+    } catch {
+      // leave variables as {} on parse failure
+    }
+    resolvedData = { query, variables };
   }
 
   return {

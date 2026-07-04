@@ -6,8 +6,12 @@ import { useCollectionStore, ApiRequest, Environment, KeyValuePair } from "@/sto
 import { prepareRequest } from "@/lib/requestRunner";
 import { evaluateAssertions, AssertionResult } from "@/lib/assertions";
 import { runScript } from "@/lib/scriptRunner";
+import { resolveTemplates } from "@/lib/variables";
+import { ensureOAuth2Token } from "@/lib/oauth2";
+import { hasFileEntry, findReservedKeyCollision, buildMultipartRequest } from "@/lib/multipartRequest";
 import { FiPlay, FiSliders, FiCheckCircle, FiXCircle, FiTrendingUp, FiClock, FiActivity, FiLoader, FiChevronDown, FiChevronUp } from "react-icons/fi";
-import { Button, Checkbox, InputNumber, Progress, message } from "antd";
+import { Button, Checkbox, InputNumber, Progress } from "antd";
+import { toast } from "@/lib/toast";
 import confetti from "canvas-confetti";
 
 interface RunnerLogItem {
@@ -37,6 +41,7 @@ export default function CollectionRunner() {
     addToHistory,
     updateEnvironment,
     updateCollectionVariables,
+    updateRequest,
   } = useCollectionStore();
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId) || null;
@@ -120,7 +125,7 @@ export default function CollectionRunner() {
 
     // 1. Run Pre-request Script
     if (req.preRequestScript) {
-      const preResult = runScript(req.preRequestScript, {
+      const preResult = await runScript(req.preRequestScript, {
         activeEnvName: actEnv?.name || null,
         activeEnvId: actEnv?.id || null,
         activeEnvVariables: currentEnvVars,
@@ -163,21 +168,41 @@ export default function CollectionRunner() {
       variables: currentGlobalVars,
     };
 
-    const prepared = prepareRequest(req, resolvedActiveEnv, resolvedGlobalsEnv);
+    let requestForSend = req;
+    if (req.auth?.type === "oauth2") {
+      const resolve = (v: string) => resolveTemplates(v, resolvedActiveEnv, resolvedGlobalsEnv, currentColVars);
+      const tokenResult = await ensureOAuth2Token(req, resolve);
+      if (tokenResult && Object.keys(tokenResult.oauth2Updates).length > 0) {
+        const auth = { ...req.auth, oauth2: { ...req.auth.oauth2, ...tokenResult.oauth2Updates } };
+        updateRequest(req.id, { auth });
+        requestForSend = { ...req, auth };
+      }
+    }
+
+    const prepared = prepareRequest(requestForSend, resolvedActiveEnv, resolvedGlobalsEnv, currentColVars);
     const timestamp = new Date().toLocaleTimeString();
 
     try {
-      const response = await fetch("/api/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: prepared.url,
-          method: prepared.method,
-          contentType: prepared.contentType,
-          headers: prepared.headers,
-          data: prepared.data,
-        }),
-      });
+      let response: Response;
+      if (hasFileEntry(prepared.data)) {
+        const collision = findReservedKeyCollision(prepared.data);
+        if (collision) {
+          throw new Error(`Form field key "${collision}" is reserved — please rename it.`);
+        }
+        response = await fetch("/api/seed", { method: "POST", body: buildMultipartRequest(prepared) });
+      } else {
+        response = await fetch("/api/seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: prepared.url,
+            method: prepared.method,
+            contentType: prepared.contentType,
+            headers: prepared.headers,
+            data: prepared.data,
+          }),
+        });
+      }
 
       const result = await response.json();
 
@@ -214,7 +239,7 @@ export default function CollectionRunner() {
       // 2. Run Post-response Script
       let scriptTestResults: AssertionResult[] = [];
       if (req.postResponseScript) {
-        const postResult = runScript(req.postResponseScript, {
+        const postResult = await runScript(req.postResponseScript, {
           activeEnvName: actEnv?.name || null,
           activeEnvId: actEnv?.id || null,
           activeEnvVariables: currentEnvVars,
@@ -306,7 +331,7 @@ export default function CollectionRunner() {
   const handleRunCollection = async () => {
     const selectedRequests = requests.filter((r) => selectedReqIds.includes(r.id));
     if (selectedRequests.length === 0) {
-      message.warning("Select at least one request to run");
+      toast.warning("Select at least one request to run");
       return;
     }
 
@@ -426,11 +451,11 @@ export default function CollectionRunner() {
         spread: 80,
         origin: { y: 0.6 },
       });
-      message.success("Collection test run completed with 100% pass rate!");
+      toast.success("Collection test run completed with 100% pass rate!");
     } else if (!abortRef.current) {
-      message.warning(`Collection run finished: ${currentFailed} failed tests`);
+      toast.warning(`Collection run finished: ${currentFailed} failed tests`);
     } else {
-      message.info("Runner stopped by user");
+      toast.info("Runner stopped by user");
     }
   };
 

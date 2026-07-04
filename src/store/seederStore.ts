@@ -6,6 +6,11 @@ import { useCollectionStore } from "./collectionStore";
 export type AppTheme = "system" | "light" | "dark";
 export type WorkspaceView = "client" | "runner";
 
+export interface OpenTab {
+  requestId: string;
+  collectionId: string;
+}
+
 interface SeederStore {
   activeView: WorkspaceView;
   setActiveView: (view: WorkspaceView) => void;
@@ -19,17 +24,27 @@ interface SeederStore {
   triggerReset: () => void;
   envModalOpen: boolean;
   setEnvModalOpen: (open: boolean) => void;
+
+  // Open request tabs — focuses an existing tab or opens a new one; always-open,
+  // no VS-Code-style preview-tab state machine.
+  openTabs: OpenTab[];
+  openTab: (collectionId: string, requestId: string) => void;
+  closeTab: (requestId: string) => void;
+  closeTabsForCollection: (collectionId: string) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
 }
 
-export const useSeederStore = create<SeederStore>()(
+export const useSeederStore = create
+<SeederStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       activeView: "client",
       theme: "system",
       isRunning: false,
       tourActive: false,
       resetCounter: 0,
       envModalOpen: false,
+      openTabs: [],
 
       setActiveView: (activeView) => set({ activeView }),
       setTheme: (theme) => {
@@ -41,15 +56,51 @@ export const useSeederStore = create<SeederStore>()(
       setIsRunning: (isRunning) => set({ isRunning }),
       setTourActive: (tourActive) => set({ tourActive }),
       setEnvModalOpen: (envModalOpen) => set({ envModalOpen }),
-      
+
       triggerReset: () => {
         // Reset collection workspace variables, requests, and history
         useCollectionStore.getState().resetCollectionStore();
         set((state) => ({
           activeView: "client",
           resetCounter: state.resetCounter + 1,
+          openTabs: [],
         }));
       },
+
+      openTab: (collectionId, requestId) => {
+        const exists = get().openTabs.some((t) => t.requestId === requestId);
+        if (!exists) {
+          set((state) => ({ openTabs: [...state.openTabs, { collectionId, requestId }] }));
+        }
+        useCollectionStore.getState().setActiveCollectionId(collectionId);
+        useCollectionStore.getState().setActiveRequestId(requestId);
+      },
+
+      closeTab: (requestId) => {
+        const { openTabs } = get();
+        const idx = openTabs.findIndex((t) => t.requestId === requestId);
+        if (idx === -1) return;
+        const newTabs = openTabs.filter((t) => t.requestId !== requestId);
+        const wasActive = useCollectionStore.getState().activeRequestId === requestId;
+        set({ openTabs: newTabs });
+        if (wasActive) {
+          // Prefer the tab to the right, else the one to the left, else none.
+          const next = newTabs[idx] ?? newTabs[idx - 1] ?? null;
+          useCollectionStore.getState().setActiveRequestId(next?.requestId ?? null);
+          if (next) useCollectionStore.getState().setActiveCollectionId(next.collectionId);
+        }
+      },
+
+      closeTabsForCollection: (collectionId) => set((state) => ({
+        openTabs: state.openTabs.filter((t) => t.collectionId !== collectionId),
+      })),
+
+      reorderTabs: (fromIndex, toIndex) => set((state) => {
+        const tabs = [...state.openTabs];
+        const [moved] = tabs.splice(fromIndex, 1);
+        tabs.splice(toIndex, 0, moved);
+        return { openTabs: tabs };
+      }),
     }),
     {
       name: "api-seeder-preferences",

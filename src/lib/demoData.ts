@@ -4,6 +4,7 @@
  */
 
 import type { ApiRequest, Environment } from "@/store/collectionStore";
+import { defaultOAuth2Config, defaultOwaspChecklist } from "@/store/collectionStore";
 
 const BASE = typeof window !== "undefined" ? window.location.origin : "http://localhost:3002";
 
@@ -56,8 +57,9 @@ export const DEMO_REQUESTS: DemoRequest[] = [
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
-    body: { type: "none", rawText: "", formdata: [], urlencoded: [] },
+    body: { type: "none", rawText: "", formdata: [], urlencoded: [], graphql: { query: "", variables: "{}" } },
     assertions: [
       {
         id: "demo_assert_echo_1",
@@ -111,6 +113,7 @@ be.test("Response time is acceptable", () => {
 
 console.log("Echo response received:", be.response.json().echo.method);
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -135,12 +138,14 @@ console.log("Echo response received:", be.response.json().echo.method);
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
     body: {
       type: "json",
       rawText: JSON.stringify({ email: "alice@beacon.dev", password: "beacon123" }, null, 2),
       formdata: [],
       urlencoded: [],
+      graphql: { query: "", variables: "{}" },
     },
     assertions: [
       {
@@ -196,6 +201,7 @@ if (body.token) {
   console.log("[Login] Token saved to environment:", body.token.substring(0, 30) + "...");
 }
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -225,8 +231,9 @@ if (body.token) {
       apiKeyName: "x-api-key",
       apiKeyValue: "{{api_key}}",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
-    body: { type: "none", rawText: "", formdata: [], urlencoded: [] },
+    body: { type: "none", rawText: "", formdata: [], urlencoded: [], graphql: { query: "", variables: "{}" } },
     assertions: [
       {
         id: "demo_assert_users_1",
@@ -292,6 +299,7 @@ be.test("Each user has required fields", () => {
 const body = be.response.json();
 console.log(\`[List Users] Found \${body.pagination.total} total users, showing page \${body.pagination.page}\`);
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -316,6 +324,7 @@ console.log(\`[List Users] Found \${body.pagination.total} total users, showing 
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
     body: {
       type: "json",
@@ -326,6 +335,7 @@ console.log(\`[List Users] Found \${body.pagination.total} total users, showing 
       }, null, 2),
       formdata: [],
       urlencoded: [],
+      graphql: { query: "", variables: "{}" },
     },
     assertions: [
       {
@@ -378,6 +388,7 @@ if (body.data && body.data.id) {
   console.log("[Seed Users] Created user:", body.data.name, "ID:", body.data.id);
 }
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -408,8 +419,9 @@ if (body.data && body.data.id) {
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
-    body: { type: "none", rawText: "", formdata: [], urlencoded: [] },
+    body: { type: "none", rawText: "", formdata: [], urlencoded: [], graphql: { query: "", variables: "{}" } },
     assertions: [
       {
         id: "demo_assert_posts_1",
@@ -464,6 +476,7 @@ be.test("Categories list is returned", () => {
 const body = be.response.json();
 console.log(\`[Posts] \${body.data.length} posts on page \${body.pagination.page} of \${body.pagination.totalPages}\`);
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -486,6 +499,7 @@ console.log(\`[Posts] \${body.data.length} posts on page \${body.pagination.page
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
     body: {
       type: "json",
@@ -497,6 +511,7 @@ console.log(\`[Posts] \${body.data.length} posts on page \${body.pagination.page
       }, null, 2),
       formdata: [],
       urlencoded: [],
+      graphql: { query: "", variables: "{}" },
     },
     assertions: [
       {
@@ -557,6 +572,7 @@ if (body.data && body.data.id) {
   console.log("[Create Post] Post created! ID:", body.data.id, "Slug:", body.data.slug);
 }
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -584,8 +600,9 @@ if (body.data && body.data.id) {
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
-    body: { type: "none", rawText: "", formdata: [], urlencoded: [] },
+    body: { type: "none", rawText: "", formdata: [], urlencoded: [], graphql: { query: "", variables: "{}" } },
     assertions: [
       {
         id: "demo_assert_stress_1",
@@ -611,6 +628,7 @@ if (body.data && body.data.id) {
   be.response.to.have.status(200);
 });
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -635,18 +653,20 @@ if (body.data && body.data.id) {
       apiKeyName: "x-api-key",
       apiKeyValue: "",
       apiKeyLocation: "header",
+      oauth2: defaultOAuth2Config(),
     },
     body: {
       type: "formdata",
       rawText: "",
       formdata: [
-        { key: "username", value: "alice_beacon", enabled: true, description: "Username field" },
-        { key: "project", value: "BeaconAPI Demo", enabled: true, description: "Project name" },
-        { key: "environment", value: "{{base_url}}", enabled: true, description: "From env variable" },
-        { key: "timestamp", value: new Date().toISOString(), enabled: true, description: "Current time" },
-        { key: "inactive_field", value: "this won't be sent", enabled: false, description: "Disabled" },
+        { key: "username", type: "text", value: "alice_beacon", enabled: true, description: "Username field" },
+        { key: "project", type: "text", value: "BeaconAPI Demo", enabled: true, description: "Project name" },
+        { key: "environment", type: "text", value: "{{base_url}}", enabled: true, description: "From env variable" },
+        { key: "timestamp", type: "text", value: new Date().toISOString(), enabled: true, description: "Current time" },
+        { key: "inactive_field", type: "text", value: "this won't be sent", enabled: false, description: "Disabled" },
       ],
       urlencoded: [],
+      graphql: { query: "", variables: "{}" },
     },
     assertions: [
       {
@@ -667,5 +687,6 @@ if (body.data && body.data.id) {
 });
 console.log("[Form Data] Echo confirmed form submission");
 `,
+    security: { checklist: defaultOwaspChecklist() },
   },
 ];

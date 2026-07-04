@@ -1,19 +1,29 @@
-import { Environment } from "@/store/collectionStore";
+import { Environment, KeyValuePair } from "@/store/collectionStore";
 
 /**
  * Resolves all {{variable_name}} templates in a text string using variables from:
- * 1. The currently active environment
- * 2. The global environment (id: env_globals) as a fallback
+ * 1. The currently active environment (highest precedence)
+ * 2. The global environment (id: env_globals)
+ * 3. The active collection's variables (lowest precedence)
  */
 export function resolveTemplates(
   text: string,
   activeEnv: Environment | null,
-  globalsEnv: Environment | null
+  globalsEnv: Environment | null,
+  collectionVars?: KeyValuePair[]
 ): string {
   if (!text) return "";
 
-  // Combine variables: active environment overrides globals
+  // Combine variables: active environment overrides globals overrides collection vars
   const varMap: Record<string, string> = {};
+
+  if (Array.isArray(collectionVars)) {
+    collectionVars.forEach((v) => {
+      if (v.enabled && v.key.trim()) {
+        varMap[v.key.trim()] = v.value;
+      }
+    });
+  }
 
   if (globalsEnv && Array.isArray(globalsEnv.variables)) {
     globalsEnv.variables.forEach((v) => {

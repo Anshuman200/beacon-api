@@ -2,14 +2,16 @@
 
 import { useState } from "react";
 import { useSeederStore } from "@/store/seederStore";
-import { useCollectionStore } from "@/store/collectionStore";
+import { useCollectionStore, ApiRequest, Folder } from "@/store/collectionStore";
 import { DEMO_REQUESTS, DEMO_ENVIRONMENT } from "@/lib/demoData";
 import {
   FiPlus, FiTrash2, FiCopy, FiSearch, FiClock, FiPlay,
   FiActivity, FiZap, FiEdit2, FiCheck, FiX, FiChevronDown, FiChevronRight,
-  FiFolder, FiFolderPlus,
+  FiFolder, FiFolderPlus, FiMove, FiUpload, FiDownload,
 } from "react-icons/fi";
-import { Button, Input, Tooltip, message, Popconfirm, Segmented } from "antd";
+import { Button, Input, Tooltip, Popconfirm, Segmented, Dropdown } from "antd";
+import { toast } from "@/lib/toast";
+import ImportExportModal from "./ImportExportModal";
 
 export default function RequestSidebar() {
   const { activeView, setActiveView, isRunning } = useSeederStore();
@@ -18,11 +20,12 @@ export default function RequestSidebar() {
     collections,
     activeCollectionId,
     activeRequestId,
-    setActiveCollectionId,
-    setActiveRequestId,
     addCollection,
     renameCollection,
     deleteCollection,
+    addFolder,
+    renameFolder,
+    deleteFolder,
     addRequest,
     deleteRequest,
     duplicateRequest,
@@ -49,7 +52,21 @@ export default function RequestSidebar() {
   const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [draftReqName, setDraftReqName] = useState("");
 
+  // Folder UI state
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<string>>(new Set());
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [draftFolderName, setDraftFolderName] = useState("");
+
   const [loadingDemo, setLoadingDemo] = useState(false);
+
+  // Import/Export drawer state
+  const [importExportOpen, setImportExportOpen] = useState(false);
+  const [exportCollectionId, setExportCollectionId] = useState<string | null>(null);
+
+  const openImportExport = (colId: string | null) => {
+    setExportCollectionId(colId);
+    setImportExportOpen(true);
+  };
 
   // ── Helpers ──
   const isExpanded = (colId: string) => !collapsedIds.has(colId);
@@ -80,21 +97,56 @@ export default function RequestSidebar() {
 
   const handleDeleteCollection = (id: string) => {
     if (collections.length <= 1) {
-      message.warning("Cannot delete the last collection");
+      toast.warning("Cannot delete the last collection");
       return;
     }
     deleteCollection(id);
-    message.success("Collection deleted");
+    useSeederStore.getState().closeTabsForCollection(id);
+    toast.success("Collection deleted");
+  };
+
+  // ── Folder actions ──
+  const toggleFolderCollapse = (folderId: string) => {
+    setCollapsedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const handleAddFolder = (collectionId: string) => {
+    const id = addFolder(collectionId);
+    setCollapsedIds((prev) => { const next = new Set(prev); next.delete(collectionId); return next; });
+    const col = useCollectionStore.getState().collections.find((c) => c.id === collectionId);
+    const folder = col?.folders.find((f) => f.id === id);
+    setDraftFolderName(folder?.name || "New Folder");
+    setEditingFolderId(id);
+  };
+
+  const handleConfirmFolderRename = (collectionId: string, folderId: string) => {
+    const trimmed = draftFolderName.trim();
+    if (trimmed) renameFolder(collectionId, folderId, trimmed);
+    setEditingFolderId(null);
+  };
+
+  const handleDeleteFolder = (collectionId: string, folderId: string) => {
+    deleteFolder(collectionId, folderId);
+    toast.success("Folder deleted");
+  };
+
+  const handleMoveRequest = (reqId: string, folderId: string | null) => {
+    useCollectionStore.getState().updateRequest(reqId, { folderId });
   };
 
   // ── Request actions ──
   const handleAddRequest = (collectionId: string) => {
     const id = addRequest(collectionId);
-    setActiveCollectionId(collectionId);
+    useSeederStore.getState().openTab(collectionId, id);
     setActiveView("client");
     // Expand the collection if collapsed
     setCollapsedIds((prev) => { const next = new Set(prev); next.delete(collectionId); return next; });
-    message.success("New request created");
+    toast.success("New request created");
     // Auto-rename
     const col = useCollectionStore.getState().collections.find((c) => c.id === collectionId);
     const req = col?.requests.find((r) => r.id === id);
@@ -105,17 +157,20 @@ export default function RequestSidebar() {
   const handleDuplicate = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     duplicateRequest(id);
-    message.success("Request duplicated");
+    const newId = useCollectionStore.getState().activeRequestId;
+    const owningCollection = useCollectionStore.getState().collections.find((c) => c.requests.some((r) => r.id === newId));
+    if (newId && owningCollection) useSeederStore.getState().openTab(owningCollection.id, newId);
+    toast.success("Request duplicated");
   };
 
   const handleDelete = (id: string) => {
     deleteRequest(id);
-    message.success("Request deleted");
+    useSeederStore.getState().closeTab(id);
+    toast.success("Request deleted");
   };
 
   const handleRequestClick = (collectionId: string, requestId: string) => {
-    setActiveCollectionId(collectionId);
-    setActiveRequestId(requestId);
+    useSeederStore.getState().openTab(collectionId, requestId);
     setActiveView("client");
   };
 
@@ -136,7 +191,7 @@ export default function RequestSidebar() {
         col.requests.some((r) => r.id.startsWith("demo_req_"))
       );
       if (alreadyLoaded) {
-        message.info("Demo collection is already loaded!");
+        toast.info("Demo collection is already loaded!");
         setLoadingDemo(false);
         return;
       }
@@ -163,13 +218,12 @@ export default function RequestSidebar() {
         await new Promise((r) => setTimeout(r, 10));
       }
 
-      setActiveCollectionId(demoColId);
-      setActiveRequestId(DEMO_REQUESTS[0].id);
+      useSeederStore.getState().openTab(demoColId, DEMO_REQUESTS[0].id);
       setActiveView("client");
 
-      message.success({ content: "Demo collection loaded! 8 requests ready to explore.", duration: 4 });
+      toast.success("Demo collection loaded! 8 requests ready to explore.", { duration: 4000 });
     } catch (err) {
-      message.error("Failed to load demo collection: " + String(err));
+      toast.error("Failed to load demo collection: " + String(err));
     } finally {
       setLoadingDemo(false);
     }
@@ -228,15 +282,26 @@ export default function RequestSidebar() {
           allowClear
         />
         {sidebarTab === "requests" && (
-          <Tooltip title="New Collection">
-            <Button
-              size="small"
-              icon={<FiFolderPlus className="w-3.5 h-3.5" />}
-              onClick={handleAddCollection}
-              disabled={isRunning}
-              className="flex items-center justify-center shrink-0 border-slate-500/20 dark:border-white/10 text-indigo-500"
-            />
-          </Tooltip>
+          <>
+            <Tooltip title="Import / Export">
+              <Button
+                size="small"
+                aria-label="Import / Export"
+                icon={<FiUpload className="w-3.5 h-3.5" />}
+                onClick={() => openImportExport(activeCollectionId)}
+                className="flex items-center justify-center shrink-0 border-slate-500/20 dark:border-white/10 text-indigo-500"
+              />
+            </Tooltip>
+            <Tooltip title="New Collection">
+              <Button
+                size="small"
+                icon={<FiFolderPlus className="w-3.5 h-3.5" />}
+                onClick={handleAddCollection}
+                disabled={isRunning}
+                className="flex items-center justify-center shrink-0 border-slate-500/20 dark:border-white/10 text-indigo-500"
+              />
+            </Tooltip>
+          </>
         )}
       </div>
 
@@ -260,6 +325,225 @@ export default function RequestSidebar() {
                   r.method.toLowerCase().includes(search.toLowerCase()) ||
                   `${r.baseUrl}/${r.endpoint}`.toLowerCase().includes(search.toLowerCase())
                 );
+
+                const renderRequestRow = (req: ApiRequest) => {
+                  const isActive = activeRequestId === req.id && activeView === "client";
+                  const isEditingName = editingReqId === req.id;
+                  const moveTargets = [
+                    { key: "__root__", label: "No folder (root)", disabled: !req.folderId },
+                    ...col.folders.map((f) => ({ key: f.id, label: f.name, disabled: req.folderId === f.id })),
+                  ];
+
+                  return (
+                    <div
+                      key={req.id}
+                      onClick={() => !isEditingName && handleRequestClick(col.id, req.id)}
+                      className={`flex items-center justify-between px-2.5 py-2 rounded-lg border cursor-pointer group/req transition-all duration-150 ${
+                        isActive
+                          ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-600 dark:text-indigo-400"
+                          : "bg-transparent border-transparent text-slate-700 dark:text-slate-400 hover:bg-slate-500/5 dark:hover:bg-white/[0.015] hover:border-slate-500/10"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0 pr-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[8px] font-black px-1 rounded uppercase tracking-wider shrink-0 ${methodBadge(req.method)}`}>
+                            {req.method}
+                          </span>
+                          {isEditingName ? (
+                            <Input
+                              autoFocus
+                              size="small"
+                              value={draftReqName}
+                              onChange={(e) => setDraftReqName(e.target.value)}
+                              onPressEnter={() => confirmReqRename(req.id)}
+                              onBlur={() => confirmReqRename(req.id)}
+                              onKeyDown={(e) => { if (e.key === "Escape") setEditingReqId(null); }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs flex-1 h-5 min-w-0"
+                              maxLength={64}
+                            />
+                          ) : (
+                            <span className="truncate text-xs font-semibold">{req.name}</span>
+                          )}
+                        </div>
+                        {!isEditingName && (
+                          <p className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
+                            {req.baseUrl}/{req.endpoint}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Request actions */}
+                      {!isEditingName && (
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover/req:opacity-100 transition-opacity">
+                          <Tooltip title="Rename">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDraftReqName(req.name);
+                                setEditingReqId(req.id);
+                              }}
+                              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all cursor-pointer"
+                            >
+                              <FiEdit2 className="w-2.5 h-2.5" />
+                            </button>
+                          </Tooltip>
+                          {(col.folders.length > 0 || req.folderId) && (
+                            <Dropdown
+                              trigger={["click"]}
+                              menu={{
+                                items: moveTargets,
+                                onClick: ({ key }) => handleMoveRequest(req.id, key === "__root__" ? null : key),
+                              }}
+                            >
+                              <Tooltip title="Move to folder">
+                                <button
+                                  type="button"
+                                  aria-label="Move to folder"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all cursor-pointer"
+                                >
+                                  <FiMove className="w-2.5 h-2.5" />
+                                </button>
+                              </Tooltip>
+                            </Dropdown>
+                          )}
+                          <Tooltip title="Duplicate">
+                            <button
+                              type="button"
+                              onClick={(e) => handleDuplicate(req.id, e)}
+                              disabled={isRunning}
+                              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <FiCopy className="w-2.5 h-2.5" />
+                            </button>
+                          </Tooltip>
+                          <Popconfirm
+                            title="Delete request?"
+                            onConfirm={() => handleDelete(req.id)}
+                            okText="Delete"
+                            cancelText="Cancel"
+                            okButtonProps={{ danger: true }}
+                            disabled={isRunning}
+                          >
+                            <button
+                              type="button"
+                              aria-label="Delete request"
+                              onClick={(e) => e.stopPropagation()}
+                              disabled={isRunning}
+                              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                              <FiTrash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </Popconfirm>
+                        </div>
+                      )}
+
+                      {isEditingName && (
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); confirmReqRename(req.id); }}
+                            className="w-5 h-5 flex items-center justify-center rounded text-emerald-500 hover:bg-emerald-500/10 cursor-pointer"
+                          >
+                            <FiCheck className="w-2.5 h-2.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setEditingReqId(null); }}
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-500/10 cursor-pointer"
+                          >
+                            <FiX className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
+
+                const renderFolder = (folder: Folder) => {
+                  const folderExpanded = !collapsedFolderIds.has(folder.id);
+                  const folderReqs = filteredReqs.filter((r) => r.folderId === folder.id);
+                  const isEditingFolder = editingFolderId === folder.id;
+
+                  return (
+                    <div key={folder.id} className="mb-0.5">
+                      <div
+                        className="group/folder flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-slate-500/5 dark:hover:bg-white/[0.02] transition-all"
+                        onClick={() => toggleFolderCollapse(folder.id)}
+                      >
+                        <span className="text-slate-400 shrink-0 w-3">
+                          {folderExpanded
+                            ? <FiChevronDown className="w-2.5 h-2.5" />
+                            : <FiChevronRight className="w-2.5 h-2.5" />}
+                        </span>
+                        <FiFolder className="w-3 h-3 text-amber-500 shrink-0" />
+                        {isEditingFolder ? (
+                          <Input
+                            autoFocus
+                            size="small"
+                            value={draftFolderName}
+                            onChange={(e) => setDraftFolderName(e.target.value)}
+                            onPressEnter={() => handleConfirmFolderRename(col.id, folder.id)}
+                            onBlur={() => handleConfirmFolderRename(col.id, folder.id)}
+                            onKeyDown={(e) => { if (e.key === "Escape") setEditingFolderId(null); }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs font-semibold flex-1 h-6"
+                            maxLength={48}
+                          />
+                        ) : (
+                          <span className="flex-1 text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+                            {folder.name}
+                            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1.5">
+                              ({folderReqs.length})
+                            </span>
+                          </span>
+                        )}
+                        <div className="opacity-0 group-hover/folder:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
+                          <Tooltip title="Rename">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDraftFolderName(folder.name);
+                                setEditingFolderId(folder.id);
+                              }}
+                              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all cursor-pointer"
+                            >
+                              <FiEdit2 className="w-2.5 h-2.5" />
+                            </button>
+                          </Tooltip>
+                          <Popconfirm
+                            title="Delete folder"
+                            description={`Delete "${folder.name}"? Requests inside move to the collection root.`}
+                            onConfirm={() => handleDeleteFolder(col.id, folder.id)}
+                            okText="Delete"
+                            cancelText="Cancel"
+                            okButtonProps={{ danger: true }}
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer"
+                            >
+                              <FiTrash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </Popconfirm>
+                        </div>
+                      </div>
+                      {folderExpanded && (
+                        <div className="ml-4 pl-2 border-l border-slate-500/10 dark:border-white/[0.05] space-y-0.5 mb-0.5">
+                          {folderReqs.length === 0 ? (
+                            <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-slate-600">Empty folder</p>
+                          ) : (
+                            folderReqs.map((req) => renderRequestRow(req))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
 
                 return (
                   <div key={col.id} className="px-2">
@@ -317,6 +601,27 @@ export default function RequestSidebar() {
                             <FiEdit2 className="w-2.5 h-2.5" />
                           </button>
                         </Tooltip>
+                        <Tooltip title="Export">
+                          <button
+                            type="button"
+                            aria-label="Export collection"
+                            onClick={(e) => { e.stopPropagation(); openImportExport(col.id); }}
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-sky-500 hover:bg-sky-500/10 transition-all cursor-pointer"
+                          >
+                            <FiDownload className="w-2.5 h-2.5" />
+                          </button>
+                        </Tooltip>
+                        <Tooltip title="New Folder">
+                          <button
+                            type="button"
+                            aria-label="New folder"
+                            onClick={(e) => { e.stopPropagation(); handleAddFolder(col.id); }}
+                            disabled={isRunning}
+                            className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <FiFolderPlus className="w-2.5 h-2.5" />
+                          </button>
+                        </Tooltip>
                         <Tooltip title="Add Request">
                           <button
                             type="button"
@@ -351,7 +656,7 @@ export default function RequestSidebar() {
                     {/* Requests list */}
                     {expanded && (
                       <div className="ml-4 pl-2.5 border-l border-slate-500/10 dark:border-white/[0.05] mt-0.5 mb-1 space-y-0.5">
-                        {filteredReqs.length === 0 && !search && (
+                        {filteredReqs.length === 0 && col.folders.length === 0 && !search && (
                           <button
                             type="button"
                             onClick={() => handleAddRequest(col.id)}
@@ -363,116 +668,9 @@ export default function RequestSidebar() {
                           </button>
                         )}
 
-                        {filteredReqs.map((req) => {
-                          const isActive = activeRequestId === req.id && activeView === "client";
-                          const isEditingName = editingReqId === req.id;
+                        {col.folders.filter((f) => f.parentId === null).map((folder) => renderFolder(folder))}
 
-                          return (
-                            <div
-                              key={req.id}
-                              onClick={() => !isEditingName && handleRequestClick(col.id, req.id)}
-                              className={`flex items-center justify-between px-2.5 py-2 rounded-lg border cursor-pointer group/req transition-all duration-150 ${
-                                isActive
-                                  ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-600 dark:text-indigo-400"
-                                  : "bg-transparent border-transparent text-slate-700 dark:text-slate-400 hover:bg-slate-500/5 dark:hover:bg-white/[0.015] hover:border-slate-500/10"
-                              }`}
-                            >
-                              <div className="flex-1 min-w-0 pr-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`text-[8px] font-black px-1 rounded uppercase tracking-wider shrink-0 ${methodBadge(req.method)}`}>
-                                    {req.method}
-                                  </span>
-                                  {isEditingName ? (
-                                    <Input
-                                      autoFocus
-                                      size="small"
-                                      value={draftReqName}
-                                      onChange={(e) => setDraftReqName(e.target.value)}
-                                      onPressEnter={() => confirmReqRename(req.id)}
-                                      onBlur={() => confirmReqRename(req.id)}
-                                      onKeyDown={(e) => { if (e.key === "Escape") setEditingReqId(null); }}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="text-xs flex-1 h-5 min-w-0"
-                                      maxLength={64}
-                                    />
-                                  ) : (
-                                    <span className="truncate text-xs font-semibold">{req.name}</span>
-                                  )}
-                                </div>
-                                {!isEditingName && (
-                                  <p className="text-[9px] font-mono text-slate-500 truncate mt-0.5">
-                                    {req.baseUrl}/{req.endpoint}
-                                  </p>
-                                )}
-                              </div>
-
-                              {/* Request actions */}
-                              {!isEditingName && (
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover/req:opacity-100 transition-opacity">
-                                  <Tooltip title="Rename">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setDraftReqName(req.name);
-                                        setEditingReqId(req.id);
-                                      }}
-                                      className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all cursor-pointer"
-                                    >
-                                      <FiEdit2 className="w-2.5 h-2.5" />
-                                    </button>
-                                  </Tooltip>
-                                  <Tooltip title="Duplicate">
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleDuplicate(req.id, e)}
-                                      disabled={isRunning}
-                                      className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                    >
-                                      <FiCopy className="w-2.5 h-2.5" />
-                                    </button>
-                                  </Tooltip>
-                                  <Popconfirm
-                                    title="Delete request?"
-                                    onConfirm={() => handleDelete(req.id)}
-                                    okText="Delete"
-                                    cancelText="Cancel"
-                                    okButtonProps={{ danger: true }}
-                                    disabled={isRunning}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={(e) => e.stopPropagation()}
-                                      disabled={isRunning}
-                                      className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                    >
-                                      <FiTrash2 className="w-2.5 h-2.5" />
-                                    </button>
-                                  </Popconfirm>
-                                </div>
-                              )}
-
-                              {isEditingName && (
-                                <div className="flex items-center gap-0.5 shrink-0">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); confirmReqRename(req.id); }}
-                                    className="w-5 h-5 flex items-center justify-center rounded text-emerald-500 hover:bg-emerald-500/10 cursor-pointer"
-                                  >
-                                    <FiCheck className="w-2.5 h-2.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setEditingReqId(null); }}
-                                    className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:bg-slate-500/10 cursor-pointer"
-                                  >
-                                    <FiX className="w-2.5 h-2.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {filteredReqs.filter((r) => !r.folderId).map((req) => renderRequestRow(req))}
 
                         {/* Add request at bottom of expanded collection */}
                         {col.requests.length > 0 && (
@@ -593,6 +791,12 @@ export default function RequestSidebar() {
         </Button>
 
       </div>
+
+      <ImportExportModal
+        open={importExportOpen}
+        onClose={() => setImportExportOpen(false)}
+        collectionId={exportCollectionId}
+      />
     </div>
   );
 }

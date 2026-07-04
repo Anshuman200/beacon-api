@@ -2,13 +2,19 @@
 
 import { useState, useRef, useMemo } from "react";
 import { useSeederStore } from "@/store/seederStore";
-import { useCollectionStore, ApiRequest, Assertion, AssertionTarget, AssertionOperator, AuthType, BodyType, Environment } from "@/store/collectionStore";
+import { useCollectionStore, ApiRequest, Assertion, AssertionTarget, AssertionOperator, AuthType, BodyType, Environment, KeyValuePair } from "@/store/collectionStore";
 import { prepareRequest } from "@/lib/requestRunner";
 import { evaluateAssertions, AssertionResult } from "@/lib/assertions";
 import { runScript } from "@/lib/scriptRunner";
+import { resolveTemplates } from "@/lib/variables";
+import { fetchClientCredentialsToken, runAuthorizationCodeFlow, ensureOAuth2Token } from "@/lib/oauth2";
+import { hasFileEntry, findReservedKeyCollision, buildMultipartRequest } from "@/lib/multipartRequest";
+import SecurityPanel from "./SecurityPanel";
+import { HTTP_METHODS, METHOD_THEMES } from "@/lib/methodThemes";
 import KeyValueTable from "./KeyValueTable";
-import { FiLoader, FiTerminal, FiDatabase, FiCheckCircle, FiXCircle, FiCpu, FiCode, FiLayers, FiPlus, FiCopy, FiAlignLeft, FiCoffee, FiTrash2 } from "react-icons/fi";
-import { Select, Input, Button, ConfigProvider, message, Tabs, InputNumber, Progress, AutoComplete } from "antd";
+import { FiLoader, FiTerminal, FiDatabase, FiCheckCircle, FiXCircle, FiCpu, FiCode, FiLayers, FiPlus, FiCopy, FiAlignLeft, FiCoffee, FiTrash2, FiActivity } from "react-icons/fi";
+import { Select, Input, Button, ConfigProvider, Tabs, InputNumber, Progress, AutoComplete, Checkbox } from "antd";
+import { toast } from "@/lib/toast";
 import confetti from "canvas-confetti";
 import { FaPlay } from "react-icons/fa";
 
@@ -61,19 +67,6 @@ const SCRIPT_SNIPPETS = [
   },
 ];
 
-/* ── HTTP Method Colors ── */
-const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
-
-const METHOD_THEMES: Record<string, { bg: string; border: string; text: string; primary: string }> = {
-  GET: { bg: "rgba(16, 185, 129, 0.12)", border: "rgba(16, 185, 129, 0.3)", text: "#10b981", primary: "#10b981" },
-  POST: { bg: "rgba(99, 102, 241, 0.12)", border: "rgba(99, 102, 241, 0.3)", text: "#6366f1", primary: "#6366f1" },
-  PUT: { bg: "rgba(245, 158, 11, 0.12)", border: "rgba(245, 158, 11, 0.3)", text: "#f59e0b", primary: "#f59e0b" },
-  PATCH: { bg: "rgba(6, 182, 212, 0.12)", border: "rgba(6, 182, 212, 0.3)", text: "#06b6d4", primary: "#06b6d4" },
-  DELETE: { bg: "rgba(239, 68, 68, 0.12)", border: "rgba(239, 68, 68, 0.3)", text: "#ef4444", primary: "#ef4444" },
-  OPTIONS: { bg: "rgba(107, 114, 128, 0.12)", border: "rgba(107, 114, 128, 0.3)", text: "#6b7280", primary: "#6b7280" },
-  HEAD: { bg: "rgba(139, 92, 246, 0.12)", border: "rgba(139, 92, 246, 0.3)", text: "#8b5cf6", primary: "#8b5cf6" },
-};
-
 interface SingleRequestResult {
   status: number;
   statusText: string;
@@ -119,6 +112,7 @@ export default function SeederWorkspace() {
 
   // Console log output from pre/post scripts
   const [consoleLogs, setConsoleLogs] = useState<{ source: "pre" | "post"; text: string }[]>([]);
+  const [oauth2Loading, setOauth2Loading] = useState(false);
 
   // UI state for response display
   const [responseTab, setResponseTab] = useState<"body" | "headers" | "tests" | "codegen" | "console">("body");
@@ -131,6 +125,10 @@ export default function SeederWorkspace() {
     assertions: AssertionResult[];
     passed: boolean;
   } | null>(null);
+
+  // Lifted out of SecurityPanel so "View Results" can live in the always-visible
+  // metrics bar rather than being buried inside the Security tab.
+  const [securityResultsDrawerOpen, setSecurityResultsDrawerOpen] = useState(false);
 
   const [copied, setCopied] = useState(false);
   const [copiedLang, setCopiedLang] = useState<string | null>(null);
@@ -175,12 +173,33 @@ export default function SeederWorkspace() {
   const preScriptRef = useRef<{ resizableTextArea?: { textArea: HTMLTextAreaElement } } | null>(null);
   const postScriptRef = useRef<{ resizableTextArea?: { textArea: HTMLTextAreaElement } } | null>(null);
   const [focusedScript, setFocusedScript] = useState<"pre" | "post">("post");
-  const [lastClickedSnippet, setLastClickedSnippet] = useState<string | null>(null);
 
   // Sync update request shortcuts
   const handleUpdate = (updates: Partial<ApiRequest>) => {
     if (activeReq) {
       updateRequest(activeReq.id, updates);
+    }
+  };
+
+  const handleGetOAuth2Token = async () => {
+    if (!activeReq || !activeReq.auth.oauth2) return;
+    const oauth2 = activeReq.auth.oauth2;
+    const resolve = (v: string) => resolveTemplates(v, activeEnv, globalsEnv, activeCollection?.variables);
+
+    setOauth2Loading(true);
+    try {
+      const result = oauth2.grantType === "authorization_code"
+        ? await runAuthorizationCodeFlow(oauth2, resolve)
+        : await fetchClientCredentialsToken(oauth2, resolve);
+
+      handleUpdate({
+        auth: { ...activeReq.auth, oauth2: { ...oauth2, ...result.oauth2Updates } },
+      });
+      toast.success("Access token fetched");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to fetch access token");
+    } finally {
+      setOauth2Loading(false);
     }
   };
 
@@ -190,7 +209,19 @@ export default function SeederWorkspace() {
     const ref = isPre ? preScriptRef.current : postScriptRef.current;
     const textarea = ref?.resizableTextArea?.textArea;
     const current = isPre ? (activeReq.preRequestScript || "") : (activeReq.postResponseScript || "");
-    if (current.includes(code.trim())) return;
+    const trimmedCode = code.trim();
+
+    // Toggle off: this snippet's code is already present — remove it (plus the
+    // trailing newline it was inserted with) instead of inserting a duplicate.
+    if (current.includes(trimmedCode)) {
+      const withoutSnippet = current
+        .replace(`${trimmedCode}\n`, "")
+        .replace(trimmedCode, "")
+        .replace(/\n{3,}/g, "\n\n");
+      handleUpdate(isPre ? { preRequestScript: withoutSnippet } : { postResponseScript: withoutSnippet });
+      return;
+    }
+
     let newVal: string;
     if (textarea) {
       const start = textarea.selectionStart;
@@ -236,23 +267,44 @@ export default function SeederWorkspace() {
   const fireSingleRequest = async (
     req: ApiRequest,
     actEnv: Environment | null = activeEnv,
-    globEnv: Environment | null = globalsEnv
+    globEnv: Environment | null = globalsEnv,
+    colVars: KeyValuePair[] = activeCollection?.variables || []
   ): Promise<SingleRequestResult> => {
-    const prepared = prepareRequest(req, actEnv, globEnv);
+    let requestForSend = req;
+    if (req.auth?.type === "oauth2") {
+      const resolve = (v: string) => resolveTemplates(v, actEnv, globEnv, colVars);
+      const tokenResult = await ensureOAuth2Token(req, resolve);
+      if (tokenResult && Object.keys(tokenResult.oauth2Updates).length > 0) {
+        const auth = { ...req.auth, oauth2: { ...req.auth.oauth2, ...tokenResult.oauth2Updates } };
+        updateRequest(req.id, { auth });
+        requestForSend = { ...req, auth };
+      }
+    }
+
+    const prepared = prepareRequest(requestForSend, actEnv, globEnv, colVars);
     const start = Date.now();
 
     try {
-      const res = await fetch("/api/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: prepared.url,
-          method: prepared.method,
-          contentType: prepared.contentType,
-          headers: prepared.headers,
-          data: prepared.data,
-        }),
-      });
+      let res: Response;
+      if (hasFileEntry(prepared.data)) {
+        const collision = findReservedKeyCollision(prepared.data);
+        if (collision) {
+          throw new Error(`Form field key "${collision}" is reserved — please rename it.`);
+        }
+        res = await fetch("/api/seed", { method: "POST", body: buildMultipartRequest(prepared) });
+      } else {
+        res = await fetch("/api/seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: prepared.url,
+            method: prepared.method,
+            contentType: prepared.contentType,
+            headers: prepared.headers,
+            data: prepared.data,
+          }),
+        });
+      }
 
       const result = await res.json();
       const elapsed = Date.now() - start;
@@ -293,12 +345,12 @@ export default function SeederWorkspace() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           payloads = parsed;
         } else {
-          message.error("Multiple items payload must be a non-empty JSON array");
+          toast.error("Multiple items payload must be a non-empty JSON array");
           setIsRunning(false);
           return;
         }
       } catch {
-        message.error("Invalid JSON Array syntax in items payload");
+        toast.error("Invalid JSON Array syntax in items payload");
         setIsRunning(false);
         return;
       }
@@ -340,7 +392,7 @@ export default function SeederWorkspace() {
           // urlencoded or formdata
           currentReq.body = {
             ...currentReq.body,
-            formdata: Object.entries(payloads[i] as Record<string, unknown>).map(([k, v]) => ({ key: k, value: String(v), enabled: true })),
+            formdata: Object.entries(payloads[i] as Record<string, unknown>).map(([k, v]) => ({ key: k, type: "text" as const, value: String(v), enabled: true })),
           };
         }
       }
@@ -351,7 +403,7 @@ export default function SeederWorkspace() {
 
       // Run Pre-request Script
       if (currentReq.preRequestScript) {
-        const preResult = runScript(currentReq.preRequestScript, {
+        const preResult = await runScript(currentReq.preRequestScript, {
           activeEnvName: activeEnv?.name || null,
           activeEnvId: activeEnv?.id || null,
           activeEnvVariables: currentEnvVars,
@@ -409,7 +461,7 @@ export default function SeederWorkspace() {
         variables: currentGlobalVars,
       };
 
-      const res = await fireSingleRequest(currentReq, latestActiveEnv, latestGlobalsEnv);
+      const res = await fireSingleRequest(currentReq, latestActiveEnv, latestGlobalsEnv, currentColVars);
 
       // Evaluate visual assertions
       const assertionResults = evaluateAssertions(
@@ -426,7 +478,7 @@ export default function SeederWorkspace() {
       // Run Post-response Script
       let scriptTestResults: AssertionResult[] = [];
       if (currentReq.postResponseScript) {
-        const postResult = runScript(currentReq.postResponseScript, {
+        const postResult = await runScript(currentReq.postResponseScript, {
           activeEnvName: activeEnv?.name || null,
           activeEnvId: activeEnv?.id || null,
           activeEnvVariables: currentEnvVars,
@@ -560,7 +612,7 @@ export default function SeederWorkspace() {
 
   const generatedCode = useMemo(() => {
     if (!activeReq) return { curl: "", fetch: "", axios: "", python: "", java: "", go: "", rust: "" };
-    const prepared = prepareRequest(activeReq, activeEnv, globalsEnv);
+    const prepared = prepareRequest(activeReq, activeEnv, globalsEnv, activeCollection?.variables);
 
     // cURL
     let curl = `curl -X ${prepared.method} "${prepared.url}"`;
@@ -686,7 +738,7 @@ export default function SeederWorkspace() {
     rust += `    Ok(())\n}`;
 
     return { curl, fetch: fetchStr, axios: axiosStr, python: py, java, go, rust };
-  }, [activeReq, activeEnv, globalsEnv]);
+  }, [activeReq, activeEnv, globalsEnv, activeCollection]);
 
   const activeMethod = activeReq?.method || "GET";
   const mTheme = METHOD_THEMES[activeMethod] || METHOD_THEMES.GET;
@@ -862,6 +914,7 @@ export default function SeederWorkspace() {
                           { label: "Bearer Token", value: "bearer" },
                           { label: "Basic Auth", value: "basic" },
                           { label: "API Key", value: "apikey" },
+                          { label: "OAuth 2.0", value: "oauth2" },
                         ]}
                       />
                     </div>
@@ -976,6 +1029,169 @@ export default function SeederWorkspace() {
                         </div>
                       </div>
                     )}
+
+                    {/* OAuth 2.0 */}
+                    {activeReq.auth?.type === "oauth2" && activeReq.auth.oauth2 && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                            Grant Type
+                          </p>
+                          <Select
+                            className="w-full"
+                            value={activeReq.auth.oauth2.grantType}
+                            onChange={(val) =>
+                              handleUpdate({
+                                auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, grantType: val as "client_credentials" | "authorization_code" } },
+                              })
+                            }
+                            options={[
+                              { label: "Client Credentials", value: "client_credentials" },
+                              { label: "Authorization Code", value: "authorization_code" },
+                            ]}
+                          />
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                            Access Token URL
+                          </p>
+                          <Input
+                            value={activeReq.auth.oauth2.accessTokenUrl}
+                            placeholder="https://auth.example.com/oauth/token"
+                            onChange={(e) =>
+                              handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, accessTokenUrl: e.target.value } } })
+                            }
+                            className="font-mono text-xs"
+                          />
+                        </div>
+
+                        {activeReq.auth.oauth2.grantType === "authorization_code" && (
+                          <>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                                Authorization URL
+                              </p>
+                              <Input
+                                value={activeReq.auth.oauth2.authorizationUrl}
+                                placeholder="https://auth.example.com/oauth/authorize"
+                                onChange={(e) =>
+                                  handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, authorizationUrl: e.target.value } } })
+                                }
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                                Redirect URI
+                              </p>
+                              <Input
+                                value={activeReq.auth.oauth2.redirectUri}
+                                placeholder={typeof window !== "undefined" ? `${window.location.origin}/oauth/callback` : "/oauth/callback"}
+                                onChange={(e) =>
+                                  handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, redirectUri: e.target.value } } })
+                                }
+                                className="font-mono text-xs"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase tracking-wider">
+                                Use PKCE
+                              </p>
+                              <Checkbox
+                                checked={activeReq.auth.oauth2.usePkce}
+                                onChange={(e) =>
+                                  handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, usePkce: e.target.checked } } })
+                                }
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                              Client ID
+                            </p>
+                            <Input
+                              value={activeReq.auth.oauth2.clientId}
+                              placeholder="Client ID"
+                              onChange={(e) =>
+                                handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, clientId: e.target.value } } })
+                              }
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                              Client Secret
+                            </p>
+                            <Input.Password
+                              value={activeReq.auth.oauth2.clientSecret}
+                              placeholder="Client Secret"
+                              onChange={(e) =>
+                                handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, clientSecret: e.target.value } } })
+                              }
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                              Scope
+                            </p>
+                            <Input
+                              value={activeReq.auth.oauth2.scope}
+                              placeholder="read write"
+                              onChange={(e) =>
+                                handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, scope: e.target.value } } })
+                              }
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-550 dark:text-slate-450 uppercase mb-1 tracking-wider">
+                              Audience
+                            </p>
+                            <Input
+                              value={activeReq.auth.oauth2.audience}
+                              placeholder="(optional)"
+                              onChange={(e) =>
+                                handleUpdate({ auth: { ...activeReq.auth, oauth2: { ...activeReq.auth.oauth2, audience: e.target.value } } })
+                              }
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          type="primary"
+                          loading={oauth2Loading}
+                          onClick={handleGetOAuth2Token}
+                          className="w-full font-bold"
+                        >
+                          Get New Access Token
+                        </Button>
+
+                        {activeReq.auth.oauth2.accessToken && (
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 space-y-0.5">
+                            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                              Current Token
+                            </p>
+                            <p className="font-mono text-[11px] text-slate-600 dark:text-slate-300 truncate">
+                              {activeReq.auth.oauth2.accessToken.slice(0, 24)}…
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              {activeReq.auth.oauth2.expiresAt
+                                ? `Expires ${new Date(activeReq.auth.oauth2.expiresAt).toLocaleTimeString()}`
+                                : "No expiry reported"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ),
               },
@@ -994,22 +1210,31 @@ export default function SeederWorkspace() {
                     <div className="flex items-center justify-between">
                       <Select
                         value={activeReq.body?.type || "none"}
-                        onChange={(val) =>
+                        onChange={(val) => {
+                          const type = val as BodyType;
+                          const ctByType: Partial<Record<BodyType, string>> = {
+                            json: "application/json",
+                            graphql: "application/json",
+                            formdata: "multipart/form-data",
+                            urlencoded: "application/x-www-form-urlencoded",
+                          };
                           handleUpdate({
-                            body: { ...activeReq.body, type: val as BodyType },
-                          })
-                        }
+                            body: { ...activeReq.body, type },
+                            contentType: ctByType[type] ?? activeReq.contentType,
+                          });
+                        }}
                         options={[
                           { label: "None", value: "none" },
                           { label: "JSON", value: "json" },
                           { label: "Form Data", value: "formdata" },
                           { label: "URL Encoded", value: "urlencoded" },
+                          { label: "GraphQL", value: "graphql" },
                           { label: "Raw (Text)", value: "raw" },
                         ]}
                         className="w-40"
                       />
 
-                      {activeReq.body?.type === "json" && (
+                      {(activeReq.body?.type === "json" || activeReq.body?.type === "graphql") && (
                         <span className="text-[10px] text-slate-500 font-semibold uppercase">
                           Content-Type: application/json
                         </span>
@@ -1031,6 +1256,40 @@ export default function SeederWorkspace() {
                       />
                     )}
 
+                    {/* GraphQL */}
+                    {activeReq.body?.type === "graphql" && (
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Query</p>
+                          <Input.TextArea
+                            value={activeReq.body.graphql?.query || ""}
+                            onChange={(e) =>
+                              handleUpdate({
+                                body: { ...activeReq.body, graphql: { ...activeReq.body.graphql, query: e.target.value } },
+                              })
+                            }
+                            placeholder={"query GetUser($id: ID!) {\n  user(id: $id) {\n    name\n  }\n}"}
+                            autoSize={{ minRows: 8, maxRows: 16 }}
+                            className="font-mono text-xs"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Variables (JSON)</p>
+                          <Input.TextArea
+                            value={activeReq.body.graphql?.variables || ""}
+                            onChange={(e) =>
+                              handleUpdate({
+                                body: { ...activeReq.body, graphql: { ...activeReq.body.graphql, variables: e.target.value } },
+                              })
+                            }
+                            placeholder={'{\n  "id": "1"\n}'}
+                            autoSize={{ minRows: 4, maxRows: 8 }}
+                            className="font-mono text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {/* Form Data */}
                     {activeReq.body?.type === "formdata" && (
                       <KeyValueTable
@@ -1041,6 +1300,7 @@ export default function SeederWorkspace() {
                           })
                         }
                         showDescription={false}
+                        allowFileRows
                       />
                     )}
 
@@ -1185,6 +1445,28 @@ export default function SeederWorkspace() {
                 ),
               },
               {
+                key: "security",
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    Security
+                    {activeReq.security?.checklist?.some((c) => c.status !== "not_tested") && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                    )}
+                  </span>
+                ),
+                children: (
+                  <SecurityPanel
+                    request={activeReq}
+                    lastResponse={lastResponse}
+                    onSend={fireSingleRequest}
+                    onUpdateChecklist={(checklist) => handleUpdate({ security: { ...activeReq.security, checklist } })}
+                    onUpdateAuthMatrixBaseline={(authMatrixBaseline) => handleUpdate({ security: { ...activeReq.security, authMatrixBaseline } })}
+                    resultsDrawerOpen={securityResultsDrawerOpen}
+                    onResultsDrawerOpenChange={setSecurityResultsDrawerOpen}
+                  />
+                ),
+              },
+              {
                 key: "scripts",
                 label: (
                   <span className="flex items-center gap-1.5">
@@ -1246,6 +1528,9 @@ export default function SeederWorkspace() {
                     </div>
 
                     {/* ── Right: Snippets Panel ── */}
+                    {(() => {
+                      const currentFocusedScript = focusedScript === "pre" ? (activeReq.preRequestScript || "") : (activeReq.postResponseScript || "");
+                      return (
                     <div className="w-52 shrink-0 border-l border-slate-500/10 dark:border-white/[0.07] flex flex-col overflow-hidden bg-slate-500/[0.015] dark:bg-white/[0.008]">
                       {/* Panel header */}
                       <div className="px-3 py-3 border-b border-slate-500/10 dark:border-white/[0.06] shrink-0 space-y-2">
@@ -1287,18 +1572,15 @@ export default function SeederWorkspace() {
                                 {group.category}
                               </span>
                             </div>
-                            {/* Snippet items */}
+                            {/* Snippet items — highlighted while their code is present in the
+                                focused script; clicking again removes it (toggle, not just insert). */}
                             {group.items.map((snippet) => {
-                              const isActive = lastClickedSnippet === snippet.label;
+                              const isActive = currentFocusedScript.includes(snippet.code.trim());
                               return (
                                 <button
                                   key={snippet.label}
                                   type="button"
-                                  onClick={() => {
-                                    insertSnippet(snippet.code);
-                                    setLastClickedSnippet(snippet.label);
-                                    setTimeout(() => setLastClickedSnippet(null), 800);
-                                  }}
+                                  onClick={() => insertSnippet(snippet.code)}
                                   className={`w-full text-left flex items-center gap-2 px-3 py-[7px] border-l-2 text-[11.5px] font-medium transition-all cursor-pointer ${isActive
                                     ? "border-l-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
                                     : "border-l-transparent text-slate-600 dark:text-slate-300 hover:border-l-indigo-400/50 hover:bg-slate-500/[0.04] dark:hover:bg-white/[0.025] hover:text-slate-900 dark:hover:text-white"
@@ -1313,6 +1595,8 @@ export default function SeederWorkspace() {
                         ))}
                       </div>
                     </div>
+                      );
+                    })()}
                   </div>
                 ),
               },
@@ -1503,6 +1787,16 @@ export default function SeederWorkspace() {
                 </span>
               </div>
             </div>
+            {activeReq.security?.checklist?.some((c) => c.status !== "not_tested") && (
+              <Button
+                size="small"
+                icon={<FiActivity />}
+                onClick={() => setSecurityResultsDrawerOpen(true)}
+                className="text-xs font-semibold shrink-0"
+              >
+                View Results
+              </Button>
+            )}
           </div>
         )}
 

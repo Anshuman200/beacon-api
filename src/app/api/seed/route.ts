@@ -72,18 +72,65 @@ interface RequestPayloadItem {
   enabled?: boolean;
 }
 
+interface ParsedRequestBody {
+  url: string;
+  method: string;
+  contentType: string | undefined;
+  customHeaders: Record<string, string>;
+  data: unknown;
+}
+
+const RESERVED_PREFIX = "__beacon_";
+
+/**
+ * Real file uploads arrive as a native multipart/form-data body (a File
+ * object can't survive JSON.stringify) — reserved __beacon_* fields carry the
+ * target url/method/contentType/headers alongside the actual form fields.
+ */
+async function parseMultipartBody(req: NextRequest): Promise<{ parsed: ParsedRequestBody; outboundForm: FormData }> {
+  const form = await req.formData();
+  const url = String(form.get(`${RESERVED_PREFIX}url`) || "");
+  const method = String(form.get(`${RESERVED_PREFIX}method`) || "POST");
+  const contentType = String(form.get(`${RESERVED_PREFIX}content_type`) || "multipart/form-data");
+  const customHeaders = JSON.parse(String(form.get(`${RESERVED_PREFIX}headers`) || "{}"));
+
+  const outboundForm = new FormData();
+  for (const [key, value] of form.entries()) {
+    if (key.startsWith(RESERVED_PREFIX)) continue;
+    outboundForm.append(key, value);
+  }
+
+  return { parsed: { url, method, contentType, customHeaders, data: null }, outboundForm };
+}
+
+async function parseJsonBody(req: NextRequest): Promise<ParsedRequestBody> {
+  const body = await req.json();
+  const { baseUrl, endpoint, method = "POST", contentType, headers: customHeaders, data } = body;
+
+  let url = body.url;
+  if (!url) {
+    if (!baseUrl || !endpoint) {
+      throw new Error("baseUrl and endpoint (or url) are required");
+    }
+    url = `${baseUrl.replace(/\/$/, "")}/${endpoint.replace(/^\//, "")}`;
+  }
+
+  return { url, method, contentType, customHeaders: customHeaders || {}, data };
+}
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
   try {
-    const body = await req.json();
-    const { baseUrl, endpoint, method = "POST", contentType, headers: customHeaders, data } = body;
+    const incomingContentType = req.headers.get("content-type") || "";
+    const isMultipart = incomingContentType.startsWith("multipart/form-data");
 
-    let url = body.url;
+    const { parsed, outboundForm } = isMultipart
+      ? await parseMultipartBody(req)
+      : { parsed: await parseJsonBody(req), outboundForm: null };
+
+    const { url, method, contentType, customHeaders, data } = parsed;
     if (!url) {
-      if (!baseUrl || !endpoint) {
-        return NextResponse.json({ error: "baseUrl and endpoint (or url) are required" }, { status: 400 });
-      }
-      url = `${baseUrl.replace(/\/$/, "")}/${endpoint.replace(/^\//, "")}`;
+      return NextResponse.json({ error: "baseUrl and endpoint (or url) are required" }, { status: 400 });
     }
 
     // Derive origin so nginx/proxy treats this as a legit browser request
@@ -102,10 +149,13 @@ export async function POST(req: NextRequest) {
       ...customHeaders,
     };
 
-    let payload = data;
+    let payload: unknown = outboundForm ?? data;
 
-    // Handle structured URL-encoded and Multipart Form Data
-    if (contentType === "application/x-www-form-urlencoded") {
+    if (outboundForm) {
+      // Let axios compute its own multipart boundary header.
+      delete headers["Content-Type"];
+    } else if (contentType === "application/x-www-form-urlencoded") {
+      // Handle structured URL-encoded payloads (array of {key,value,enabled} or a plain object)
       if (Array.isArray(data)) {
         const params = new URLSearchParams();
         data.forEach((item: RequestPayloadItem) => {
@@ -118,6 +168,7 @@ export async function POST(req: NextRequest) {
         payload = new URLSearchParams(data as Record<string, string>).toString();
       }
     } else if (contentType?.startsWith("multipart/form-data")) {
+      // Legacy JSON-path multipart (text-only fields, no real files)
       if (Array.isArray(data)) {
         const form = new FormData();
         data.forEach((item: RequestPayloadItem) => {
@@ -125,7 +176,6 @@ export async function POST(req: NextRequest) {
             form.append(item.key, item.value || "");
           }
         });
-        // Delete Content-Type so Axios handles the multipart boundary header creation automatically
         delete headers["Content-Type"];
         payload = form;
       }

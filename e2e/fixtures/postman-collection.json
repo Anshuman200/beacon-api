@@ -1,0 +1,48 @@
+{
+  "info": {
+    "name": "Postman Import Test",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth Folder",
+      "item": [
+        {
+          "name": "Get Echo",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-Test", "value": "abc" }],
+            "url": {
+              "raw": "http://localhost:3000/api/demo/echo?foo=bar",
+              "query": [{ "key": "foo", "value": "bar" }]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": { "exec": ["pm.test(\"status is 200\", () => { pm.response.to.have.status(200); });"] }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Root Request",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": { "raw": "http://localhost:3000/api/demo/echo" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"hello\":\"world\"}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    }
+  ],
+  "variable": [{ "key": "authToken", "value": "postman-var-value" }]
+}

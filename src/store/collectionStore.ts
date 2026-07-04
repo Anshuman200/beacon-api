@@ -7,9 +7,32 @@ export interface KeyValuePair {
   value: string;
   description?: string;
   enabled: boolean;
+  /** When true, export omits this variable's value (key is kept so a re-import can prompt for it). */
+  secret?: boolean;
 }
 
-export type AuthType = "none" | "bearer" | "basic" | "apikey";
+export type AuthType = "none" | "bearer" | "basic" | "apikey" | "oauth2";
+export type OAuth2GrantType = "client_credentials" | "authorization_code";
+
+export interface OAuth2Config {
+  grantType: OAuth2GrantType;
+  accessTokenUrl: string;
+  /** authorization_code only */
+  authorizationUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scope: string;
+  audience: string;
+  /** authorization_code only; defaults to `${origin}/oauth/callback` */
+  redirectUri: string;
+  /** authorization_code only, default true */
+  usePkce: boolean;
+  // Populated after a successful token fetch — not directly user-edited.
+  accessToken: string;
+  tokenType: string;
+  expiresAt: number | null;
+  refreshToken: string;
+}
 
 export interface AuthConfig {
   type: AuthType;
@@ -19,15 +42,35 @@ export interface AuthConfig {
   apiKeyName: string;
   apiKeyValue: string;
   apiKeyLocation: "header" | "query";
+  oauth2: OAuth2Config;
 }
 
-export type BodyType = "none" | "json" | "formdata" | "urlencoded" | "raw";
+export type BodyType = "none" | "json" | "formdata" | "urlencoded" | "raw" | "graphql";
+
+export interface GraphQLBody {
+  query: string;
+  /** Raw JSON text, parsed at send-time (mirrors how rawText is handled). */
+  variables: string;
+}
+
+export interface FormDataPair {
+  key: string;
+  type: "text" | "file";
+  /** Used when type === "text". */
+  value: string;
+  description?: string;
+  enabled: boolean;
+  secret?: boolean;
+  /** Used when type === "file". In-memory only — never persisted across a reload. */
+  file?: File;
+}
 
 export interface BodyConfig {
   type: BodyType;
   rawText: string;
-  formdata: KeyValuePair[];
+  formdata: FormDataPair[];
   urlencoded: KeyValuePair[];
+  graphql: GraphQLBody;
 }
 
 export type AssertionTarget = "status_code" | "response_time" | "content_type" | "json_path" | "body_text" | "header";
@@ -39,6 +82,44 @@ export interface Assertion {
   property: string;
   operator: AssertionOperator;
   value: string;
+}
+
+export type OwaspApiCategory =
+  | "API1_BOLA"
+  | "API2_BROKEN_AUTH"
+  | "API3_PROPERTY_AUTH"
+  | "API4_RESOURCE_CONSUMPTION"
+  | "API5_FUNCTION_AUTH"
+  | "API6_SENSITIVE_FLOWS"
+  | "API7_SSRF"
+  | "API8_MISCONFIGURATION"
+  | "API9_INVENTORY"
+  | "API10_UNSAFE_CONSUMPTION";
+
+export interface OwaspChecklistItem {
+  category: OwaspApiCategory;
+  status: "not_tested" | "pass" | "fail" | "n_a";
+  notes: string;
+}
+
+export interface AuthMatrixSnapshot {
+  profileId: string;
+  status: number;
+  timestamp: string;
+}
+
+export interface RequestSecurity {
+  checklist: OwaspChecklistItem[];
+  authMatrixBaseline?: AuthMatrixSnapshot[];
+}
+
+/** A named auth "role" (e.g. Admin/Regular User/Anonymous) tested across requests via the Authorization Matrix. */
+export interface AuthProfile {
+  id: string;
+  name: string;
+  auth: AuthConfig;
+  /** Optional target status this role is expected to get; blank = no expectation set yet. */
+  expectedStatus?: number;
 }
 
 export interface ApiRequest {
@@ -59,6 +140,16 @@ export interface ApiRequest {
   jsonItems: string;
   preRequestScript: string;
   postResponseScript: string;
+  /** null/undefined = sits at the collection root, not inside any folder. */
+  folderId?: string | null;
+  security: RequestSecurity;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  /** null = sits at the collection root; otherwise the parent folder's id. */
+  parentId: string | null;
 }
 
 export interface Collection {
@@ -66,6 +157,8 @@ export interface Collection {
   name: string;
   requests: ApiRequest[];
   variables: KeyValuePair[];
+  folders: Folder[];
+  authProfiles: AuthProfile[];
 }
 
 export interface Environment {
@@ -88,6 +181,62 @@ export interface HistoryEntry {
   assertionTotalCount: number;
 }
 
+export const defaultOAuth2Config = (): OAuth2Config => ({
+  grantType: "client_credentials",
+  accessTokenUrl: "",
+  authorizationUrl: "",
+  clientId: "",
+  clientSecret: "",
+  scope: "",
+  audience: "",
+  redirectUri: "",
+  usePkce: true,
+  accessToken: "",
+  tokenType: "Bearer",
+  expiresAt: null,
+  refreshToken: "",
+});
+
+const OWASP_API_CATEGORIES: OwaspApiCategory[] = [
+  "API1_BOLA",
+  "API2_BROKEN_AUTH",
+  "API3_PROPERTY_AUTH",
+  "API4_RESOURCE_CONSUMPTION",
+  "API5_FUNCTION_AUTH",
+  "API6_SENSITIVE_FLOWS",
+  "API7_SSRF",
+  "API8_MISCONFIGURATION",
+  "API9_INVENTORY",
+  "API10_UNSAFE_CONSUMPTION",
+];
+
+export const defaultOwaspChecklist = (): OwaspChecklistItem[] =>
+  OWASP_API_CATEGORIES.map((category) => ({ category, status: "not_tested", notes: "" }));
+
+const emptyAuth = (type: AuthType): AuthConfig => ({
+  type,
+  bearerToken: "",
+  basicUser: "",
+  basicPass: "",
+  apiKeyName: "x-api-key",
+  apiKeyValue: "",
+  apiKeyLocation: "header",
+  oauth2: defaultOAuth2Config(),
+});
+
+/**
+ * A tester shouldn't have to build the "does this reject anonymous/lower-privilege
+ * callers?" test from scratch every time — seed the three roles almost every API
+ * needs checked. Tokens are left blank for the tester to fill in; Anonymous
+ * defaults to "expect 401" since that's the one row nearly every secured
+ * endpoint should satisfy out of the box.
+ */
+export const defaultAuthProfiles = (): AuthProfile[] => [
+  { id: "authp_" + Date.now() + "_anon", name: "Anonymous", auth: emptyAuth("none"), expectedStatus: 401 },
+  { id: "authp_" + Date.now() + "_user", name: "Regular User", auth: emptyAuth("bearer") },
+  { id: "authp_" + Date.now() + "_admin", name: "Admin", auth: emptyAuth("bearer") },
+];
+
 export const createDefaultRequest = (id: string, name = "New Request"): ApiRequest => ({
   id,
   name,
@@ -105,12 +254,14 @@ export const createDefaultRequest = (id: string, name = "New Request"): ApiReque
     apiKeyName: "x-api-key",
     apiKeyValue: "",
     apiKeyLocation: "header",
+    oauth2: defaultOAuth2Config(),
   },
   body: {
     type: "none",
     rawText: "{}",
     formdata: [],
     urlencoded: [],
+    graphql: { query: "", variables: "{}" },
   },
   assertions: [
     {
@@ -141,6 +292,7 @@ export const createDefaultRequest = (id: string, name = "New Request"): ApiReque
   jsonItems: "[]",
   preRequestScript: "",
   postResponseScript: `const body = be.response.json();\nconsole.log("response is :- ", body);`,
+  security: { checklist: defaultOwaspChecklist(), authMatrixBaseline: [] },
 });
 
 interface CollectionStore {
@@ -152,6 +304,21 @@ interface CollectionStore {
   renameCollection: (id: string, name: string) => void;
   deleteCollection: (id: string) => void;
   updateCollectionVariables: (collectionId: string, variables: KeyValuePair[]) => void;
+  /** Inserts a fully-formed collection (e.g. from an import), activating it. */
+  importCollection: (collection: Collection) => void;
+  importEnvironments: (environments: Environment[]) => void;
+
+  // Folders (nested within collections, flat with parent pointers)
+  addFolder: (collectionId: string, name?: string, parentId?: string | null) => string;
+  renameFolder: (collectionId: string, folderId: string, name: string) => void;
+  deleteFolder: (collectionId: string, folderId: string) => void;
+
+  // Auth profiles (named roles tested via the Authorization Matrix)
+  addAuthProfile: (collectionId: string, name?: string) => string;
+  updateAuthProfile: (collectionId: string, profileId: string, updates: Partial<AuthProfile>) => void;
+  deleteAuthProfile: (collectionId: string, profileId: string) => void;
+  /** Backfills the default role templates for collections persisted before this feature existed (or since emptied out by hand — a no-op once any profile exists). */
+  ensureDefaultAuthProfiles: (collectionId: string) => void;
 
   // Requests (nested within collections)
   activeRequestId: string | null;
@@ -185,7 +352,7 @@ const DEFAULT_REQUEST_ID = "req_default";
 const buildInitialState = () => {
   const defaultReq = createDefaultRequest(DEFAULT_REQUEST_ID, "Default Request");
   return {
-    collections: [{ id: DEFAULT_COLLECTION_ID, name: "My Collection", requests: [defaultReq], variables: [] }],
+    collections: [{ id: DEFAULT_COLLECTION_ID, name: "My Collection", requests: [defaultReq], variables: [], folders: [], authProfiles: defaultAuthProfiles() }],
     activeCollectionId: DEFAULT_COLLECTION_ID,
     activeRequestId: DEFAULT_REQUEST_ID,
     environments: [{ id: "env_globals", name: "Globals", variables: [] }],
@@ -193,6 +360,33 @@ const buildInitialState = () => {
     history: [],
   };
 };
+
+/**
+ * File/Blob attachments in formdata rows can't survive JSON.stringify (they
+ * serialize to `{}`) or a page reload — they're intentionally session-only.
+ * Strip them explicitly before persisting so a reload shows a clean "no file
+ * selected" row instead of a resurrected-but-broken `{}` object.
+ */
+function stripFormDataFiles(serializedState: string): string {
+  try {
+    const parsed = JSON.parse(serializedState);
+    const collections = parsed?.state?.collections;
+    if (!Array.isArray(collections)) return serializedState;
+    for (const col of collections) {
+      for (const req of col.requests ?? []) {
+        const formdata = req?.body?.formdata;
+        if (Array.isArray(formdata)) {
+          for (const fd of formdata) {
+            if (fd && "file" in fd) delete fd.file;
+          }
+        }
+      }
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return serializedState;
+  }
+}
 
 export const useCollectionStore = create<CollectionStore>()(
   persist(
@@ -207,7 +401,7 @@ export const useCollectionStore = create<CollectionStore>()(
         set((state) => {
           const colName = name || `Collection ${state.collections.length + 1}`;
           return {
-            collections: [...state.collections, { id, name: colName, requests: [], variables: [] }],
+            collections: [...state.collections, { id, name: colName, requests: [], variables: [], folders: [], authProfiles: defaultAuthProfiles() }],
             activeCollectionId: id,
           };
         });
@@ -237,6 +431,109 @@ export const useCollectionStore = create<CollectionStore>()(
       updateCollectionVariables: (collectionId, variables) => set((state) => ({
         collections: state.collections.map((c) => c.id === collectionId ? { ...c, variables } : c),
       })),
+
+      importCollection: (collection) => set((state) => ({
+        collections: [...state.collections, collection],
+        activeCollectionId: collection.id,
+      })),
+
+      importEnvironments: (environments) => set((state) => ({
+        environments: [...state.environments, ...environments],
+      })),
+
+      // ── Folders ──
+      addFolder: (collectionId, name, parentId) => {
+        const id = "fld_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        set((state) => {
+          const targetCol = state.collections.find((c) => c.id === collectionId);
+          if (!targetCol) return {};
+          const folderName = name || `Folder ${targetCol.folders.length + 1}`;
+          const newFolder: Folder = { id, name: folderName, parentId: parentId ?? null };
+          return {
+            collections: state.collections.map((c) =>
+              c.id === collectionId ? { ...c, folders: [...c.folders, newFolder] } : c
+            ),
+          };
+        });
+        return id;
+      },
+
+      renameFolder: (collectionId, folderId, name) => set((state) => ({
+        collections: state.collections.map((c) =>
+          c.id === collectionId
+            ? { ...c, folders: c.folders.map((f) => f.id === folderId ? { ...f, name } : f) }
+            : c
+        ),
+      })),
+
+      deleteFolder: (collectionId, folderId) => set((state) => ({
+        collections: state.collections.map((c) => {
+          if (c.id !== collectionId) return c;
+          // Requests and child folders inside the deleted folder move up to its parent
+          // (root, since folders are flat-with-parent-pointer) rather than being deleted.
+          return {
+            ...c,
+            folders: c.folders
+              .filter((f) => f.id !== folderId)
+              .map((f) => f.parentId === folderId ? { ...f, parentId: null } : f),
+            requests: c.requests.map((r) => r.folderId === folderId ? { ...r, folderId: null } : r),
+          };
+        }),
+      })),
+
+      // ── Auth profiles ──
+      addAuthProfile: (collectionId, name) => {
+        const id = "authp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        set((state) => {
+          const targetCol = state.collections.find((c) => c.id === collectionId);
+          if (!targetCol) return {};
+          const profileName = name || `Role ${(targetCol.authProfiles ?? []).length + 1}`;
+          const newProfile: AuthProfile = {
+            id,
+            name: profileName,
+            auth: {
+              type: "none",
+              bearerToken: "",
+              basicUser: "",
+              basicPass: "",
+              apiKeyName: "x-api-key",
+              apiKeyValue: "",
+              apiKeyLocation: "header",
+              oauth2: defaultOAuth2Config(),
+            },
+          };
+          return {
+            collections: state.collections.map((c) =>
+              c.id === collectionId ? { ...c, authProfiles: [...(c.authProfiles ?? []), newProfile] } : c
+            ),
+          };
+        });
+        return id;
+      },
+
+      updateAuthProfile: (collectionId, profileId, updates) => set((state) => ({
+        collections: state.collections.map((c) =>
+          c.id === collectionId
+            ? { ...c, authProfiles: (c.authProfiles ?? []).map((p) => p.id === profileId ? { ...p, ...updates } : p) }
+            : c
+        ),
+      })),
+
+      deleteAuthProfile: (collectionId, profileId) => set((state) => ({
+        collections: state.collections.map((c) =>
+          c.id === collectionId ? { ...c, authProfiles: (c.authProfiles ?? []).filter((p) => p.id !== profileId) } : c
+        ),
+      })),
+
+      ensureDefaultAuthProfiles: (collectionId) => set((state) => {
+        const col = state.collections.find((c) => c.id === collectionId);
+        if (!col || (col.authProfiles ?? []).length > 0) return {};
+        return {
+          collections: state.collections.map((c) =>
+            c.id === collectionId ? { ...c, authProfiles: defaultAuthProfiles() } : c
+          ),
+        };
+      }),
 
       // ── Requests ──
       setActiveRequestId: (activeRequestId) => set({ activeRequestId }),
@@ -358,13 +655,14 @@ export const useCollectionStore = create<CollectionStore>()(
             return await decryptData(val);
           },
           setItem: async (name, value) => {
-            const encrypted = await encryptData(value);
+            const stripped = stripFormDataFiles(value);
+            const encrypted = await encryptData(stripped);
             localStorage.setItem(name, encrypted);
           },
           removeItem: (name) => localStorage.removeItem(name),
         };
       }),
-      version: 1,
+      version: 5,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = persistedState as Record<string, unknown> | null;
         if (!state || typeof state !== "object") return buildInitialState();
@@ -378,6 +676,8 @@ export const useCollectionStore = create<CollectionStore>()(
             name: colName,
             requests: oldRequests.length > 0 ? oldRequests : [createDefaultRequest(DEFAULT_REQUEST_ID, "Default Request")],
             variables: [],
+            folders: [],
+            authProfiles: defaultAuthProfiles(),
           };
           const { requests: _r, collectionName: _cn, ...rest } = state as Record<string, unknown>;
           void _r; void _cn;
@@ -395,6 +695,88 @@ export const useCollectionStore = create<CollectionStore>()(
           state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => ({
             ...col,
             variables: (col.variables as KeyValuePair[] | undefined) ?? [],
+          }));
+        }
+
+        // v1 → v2: backfill `folders: []` on any collection that's missing it
+        if (fromVersion < 2 && Array.isArray(state.collections)) {
+          state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => ({
+            ...col,
+            folders: (col.folders as Folder[] | undefined) ?? [],
+          }));
+        }
+
+        // v2 → v3: backfill `body.graphql`, `auth.oauth2`, and `formdata[].type` on every request
+        if (fromVersion < 3 && Array.isArray(state.collections)) {
+          state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => {
+            const requests = (col.requests as Array<Record<string, unknown>> | undefined) ?? [];
+            return {
+              ...col,
+              requests: requests.map((req) => {
+                const body = (req.body as Record<string, unknown> | undefined) ?? {};
+                const auth = (req.auth as Record<string, unknown> | undefined) ?? {};
+                const formdata = (body.formdata as Array<Record<string, unknown>> | undefined) ?? [];
+                return {
+                  ...req,
+                  body: {
+                    ...body,
+                    graphql: (body.graphql as GraphQLBody | undefined) ?? { query: "", variables: "{}" },
+                    formdata: formdata.map((fd) => ({ type: "text", ...fd })),
+                  },
+                  auth: {
+                    ...auth,
+                    oauth2: (auth.oauth2 as OAuth2Config | undefined) ?? defaultOAuth2Config(),
+                  },
+                };
+              }),
+            };
+          });
+        }
+
+        // v3 → v4: backfill `security.checklist` on every request
+        if (fromVersion < 4 && Array.isArray(state.collections)) {
+          state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => {
+            const requests = (col.requests as Array<Record<string, unknown>> | undefined) ?? [];
+            return {
+              ...col,
+              requests: requests.map((req) => {
+                const security = (req.security as RequestSecurity | undefined) ?? undefined;
+                return {
+                  ...req,
+                  security: security?.checklist ? security : { checklist: defaultOwaspChecklist() },
+                };
+              }),
+            };
+          });
+        }
+
+        // v4 → v5: backfill `authProfiles: []` on every collection, `security.authMatrixBaseline: []` on every request
+        if (fromVersion < 5 && Array.isArray(state.collections)) {
+          state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => {
+            const requests = (col.requests as Array<Record<string, unknown>> | undefined) ?? [];
+            return {
+              ...col,
+              authProfiles: (col.authProfiles as AuthProfile[] | undefined) ?? defaultAuthProfiles(),
+              requests: requests.map((req) => {
+                const security = (req.security as RequestSecurity | undefined) ?? { checklist: defaultOwaspChecklist() };
+                return {
+                  ...req,
+                  security: { ...security, authMatrixBaseline: security.authMatrixBaseline ?? [] },
+                };
+              }),
+            };
+          });
+        }
+
+        // Unconditional (not fromVersion-gated) safety net: a collection created
+        // via `addCollection` while an older build of the app was still running
+        // in the tab (e.g. mid hot-reload during development) can end up persisted
+        // without `authProfiles` even though the store's version is already 5,
+        // since the version-gated block above only runs once per store version.
+        if (Array.isArray(state.collections)) {
+          state.collections = (state.collections as Array<Record<string, unknown>>).map((col) => ({
+            ...col,
+            authProfiles: (col.authProfiles as AuthProfile[] | undefined) ?? defaultAuthProfiles(),
           }));
         }
 

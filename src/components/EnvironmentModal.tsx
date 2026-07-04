@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useCollectionStore, KeyValuePair } from "@/store/collectionStore";
 import { FiPlus, FiTrash2, FiGlobe, FiLayers, FiCheck, FiInfo, FiX } from "react-icons/fi";
-import { Button, Input, message, Drawer } from "antd";
+import { Button, Input, Drawer } from "antd";
+import { toast } from "@/lib/toast";
 import KeyValueTable from "./KeyValueTable";
 
 interface Props {
@@ -28,13 +29,13 @@ export default function EnvironmentModal({ open, onClose }: Props) {
 
   const handleAddEnvironment = () => {
     if (!newEnvName.trim()) {
-      message.error("Environment name cannot be empty");
+      toast.error("Environment name cannot be empty");
       return;
     }
     const id = addEnvironment(newEnvName.trim());
     setNewEnvName("");
     setSelectedEnvId(id);
-    message.success(`Environment "${newEnvName}" created`);
+    toast.success(`Environment "${newEnvName}" created`);
   };
 
   const handleVariablesChange = (newVars: KeyValuePair[]) => {
@@ -44,14 +45,14 @@ export default function EnvironmentModal({ open, onClose }: Props) {
   const handleDeleteEnvironment = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (id === "env_globals") {
-      message.error("Cannot delete Globals environment");
+      toast.error("Cannot delete Globals environment");
       return;
     }
     deleteEnvironment(id);
     if (selectedEnvId === id) {
       setSelectedEnvId("env_globals");
     }
-    message.success("Environment deleted");
+    toast.success("Environment deleted");
   };
 
   const toggleActive = (id: string, e: React.MouseEvent) => {
@@ -229,6 +230,7 @@ export default function EnvironmentModal({ open, onClose }: Props) {
               keyPlaceholder="VARIABLE_NAME"
               valuePlaceholder="value"
               showDescription={false}
+              showSecretToggle
             />
           </div>
 

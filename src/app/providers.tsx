@@ -4,6 +4,7 @@ import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { ConfigProvider, App, theme as antdTheme } from "antd";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { Toaster } from "sonner";
 import { useSeederStore } from "@/store/seederStore";
 
 export default function Providers({ children }: { children: ReactNode }) {
@@ -93,6 +94,18 @@ export default function Providers({ children }: { children: ReactNode }) {
       >
         <App style={{ height: "100%" }}>
           {children}
+          <Toaster
+            theme={resolvedTheme}
+            position="top-center"
+            richColors
+            closeButton
+            toastOptions={{
+              style: {
+                borderRadius: 10,
+                fontFamily: "var(--font-sans)",
+              },
+            }}
+          />
         </App>
       </ConfigProvider>
     </AntdRegistry>
