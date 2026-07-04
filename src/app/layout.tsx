@@ -13,9 +13,18 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://main.d35klirppq94rz.amplifyapp.com";
+const SITE_TITLE = "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite";
+const SITE_DESCRIPTION = "A beautiful tool to test and seed data through API endpoints with sandboxed scripting";
+
 export const metadata: Metadata = {
-  title: "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite",
-  description: "A beautiful tool to test and seed data through API endpoints with sandboxed scripting",
+  // Required so relative OG/Twitter image paths below resolve to absolute
+  // URLs — link-preview crawlers (iMessage, Slack, X, etc.) won't fetch a
+  // relative path. Override with NEXT_PUBLIC_SITE_URL if a custom domain
+  // replaces the default Amplify one.
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -29,6 +38,20 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Beacon API",
+  },
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: "/",
+    siteName: "Beacon API",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Beacon API" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ["/og-image.png"],
   },
 };
 
