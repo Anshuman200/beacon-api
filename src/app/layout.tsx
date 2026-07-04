@@ -55,6 +55,12 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [ICONS.ogImage],
   },
+  verification: {
+    // Google Search Console — the public/google754a75844f3a0f0b.html file
+    // verifies too; both are kept since Search Console warns not to remove
+    // a file once it's been used to establish ownership.
+    google: "46mx3dgTWt19FRWfzu12S4-lqq83-4QyEKoZ4VPNwKQ",
+  },
 };
 
 export const viewport: Viewport = {
