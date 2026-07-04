@@ -1,7 +1,7 @@
 "use client";
 
 import { Drawer, Progress, Button } from "antd";
-import { FiDownload, FiAlertTriangle, FiInfo } from "react-icons/fi";
+import { FiDownload, FiAlertTriangle, FiInfo, FiCheckCircle, FiXCircle, FiHelpCircle } from "react-icons/fi";
 import type { OwaspChecklistItem } from "@/store/collectionStore";
 import type { SecurityFinding } from "@/lib/securityAnalysis";
 import type { MatrixResultSummary } from "@/components/AuthMatrixSection";
@@ -22,6 +22,46 @@ const SEVERITY_STYLES: Record<SecurityFinding["severity"], { bg: string; text: s
 };
 
 const SEVERITY_ORDER: SecurityFinding["severity"][] = ["high", "medium", "low", "info"];
+
+type Readiness = "not_ready" | "needs_review" | "ready";
+
+/**
+ * A heuristic, not a certification — mirrors this module's honest-detection
+ * principle (never claim more confidence than the underlying checks support).
+ * "ready" only ever means "nothing this scan looked at is blocking," not "this
+ * API has been fully audited."
+ */
+function computeReadiness(
+  severityCounts: Record<SecurityFinding["severity"], number>,
+  checklistFail: number,
+  checklistNotTested: number,
+  matrixProblemCount: number
+): Readiness {
+  if (severityCounts.high > 0 || checklistFail > 0 || matrixProblemCount > 0) return "not_ready";
+  if (checklistNotTested > 0 || severityCounts.medium > 0) return "needs_review";
+  return "ready";
+}
+
+const READINESS_META: Record<Readiness, { label: string; sub: string; icon: typeof FiCheckCircle; classes: string }> = {
+  not_ready: {
+    label: "Not Production Ready",
+    sub: "Blocking issues found below — fix these before shipping.",
+    icon: FiXCircle,
+    classes: "bg-rose-500/10 border-rose-500/25 text-rose-500",
+  },
+  needs_review: {
+    label: "Needs Review",
+    sub: "No blocking issues yet, but some checks haven't run or finished — review them before shipping.",
+    icon: FiHelpCircle,
+    classes: "bg-amber-500/10 border-amber-500/25 text-amber-500",
+  },
+  ready: {
+    label: "No Blocking Issues Found",
+    sub: "Every check run so far came back clean — still worth a human review before shipping.",
+    icon: FiCheckCircle,
+    classes: "bg-emerald-500/10 border-emerald-500/25 text-emerald-500",
+  },
+};
 
 interface Props {
   open: boolean;
@@ -77,6 +117,10 @@ export default function SecurityScanResultsDrawer({
   const matrixPass = matrixResults.filter((r) => !r.isMismatch && !r.isRegression).length;
   const matrixProblems = matrixResults.filter((r) => r.isMismatch || r.isRegression);
 
+  const readiness = computeReadiness(severityCounts, checklistFail, checklistNotTested, matrixProblems.length);
+  const readinessMeta = READINESS_META[readiness];
+  const ReadinessIcon = readinessMeta.icon;
+
   return (
     <Drawer
       title={`Security Scan Results — ${requestName}`}
@@ -91,6 +135,14 @@ export default function SecurityScanResultsDrawer({
       }
     >
       <div className="space-y-5">
+        <div className={`flex items-center gap-2.5 rounded-xl border px-3.5 py-3 ${readinessMeta.classes}`}>
+          <ReadinessIcon className="w-5 h-5 shrink-0" />
+          <div>
+            <p className="text-sm font-black">{readinessMeta.label}</p>
+            <p className="text-[11px] font-medium opacity-90 mt-0.5">{readinessMeta.sub}</p>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col items-center">
             <Progress

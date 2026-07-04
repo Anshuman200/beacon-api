@@ -202,6 +202,35 @@ describe("parseOpenApiDocument — OpenAPI 3.x", () => {
   });
 });
 
+describe("parseOpenApiDocument — relative servers[].url (real-world bug)", () => {
+  // OpenAPI explicitly permits a relative `servers[].url` (e.g. "/api/v1"),
+  // meaning "relative to wherever this document is hosted." Without a
+  // sourceUrl to resolve against, that literal relative path used to get
+  // saved as base_url — producing an unusable environment variable.
+  const docWithRelativeServer = {
+    ...openApi3Doc,
+    servers: [{ url: "/api/v1" }],
+  };
+
+  it("resolves a relative server URL against the sourceUrl the spec was fetched from", () => {
+    const result = parseOpenApiDocument(
+      JSON.stringify(docWithRelativeServer),
+      undefined,
+      "https://apiauthdev.datacollect.equalyz.ai/swagger/swagger.json"
+    );
+    expect(result.environments[0].variables[0]).toEqual({
+      key: "base_url",
+      value: "https://apiauthdev.datacollect.equalyz.ai/api/v1",
+      enabled: true,
+    });
+  });
+
+  it("leaves the relative URL as a literal best-effort fallback when no sourceUrl is available (e.g. file upload)", () => {
+    const result = parseOpenApiDocument(JSON.stringify(docWithRelativeServer));
+    expect(result.environments[0].variables[0].value).toBe("/api/v1");
+  });
+});
+
 describe("parseOpenApiDocument — Swagger 2.0", () => {
   const result = parseOpenApiDocument(JSON.stringify(swagger2Doc));
 
@@ -318,8 +347,9 @@ describe("fetchOpenApiSpecFromUrl", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const spec = await fetchOpenApiSpecFromUrl("https://api.example.com/swagger/", { type: "none" });
-    expect(JSON.parse(spec)).toEqual(openApi3Doc);
+    const { text, url } = await fetchOpenApiSpecFromUrl("https://api.example.com/swagger/", { type: "none" });
+    expect(JSON.parse(text)).toEqual(openApi3Doc);
+    expect(url).toBe("https://api.example.com/swagger/swagger.json");
   });
 
   it("discovers the real spec from an inline url config in the HTML page itself", async () => {
@@ -330,8 +360,9 @@ describe("fetchOpenApiSpecFromUrl", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const spec = await fetchOpenApiSpecFromUrl("https://api.example.com/docs", { type: "none" });
-    expect(JSON.parse(spec)).toEqual(openApi3Doc);
+    const { text, url } = await fetchOpenApiSpecFromUrl("https://api.example.com/docs", { type: "none" });
+    expect(JSON.parse(text)).toEqual(openApi3Doc);
+    expect(url).toBe("https://api.example.com/openapi.json");
   });
 
   it("falls back to conventional spec paths when no config URL can be found in the HTML", async () => {
@@ -344,8 +375,9 @@ describe("fetchOpenApiSpecFromUrl", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const spec = await fetchOpenApiSpecFromUrl("https://api.example.com/docs", { type: "none" });
-    expect(JSON.parse(spec)).toEqual(openApi3Doc);
+    const { text, url } = await fetchOpenApiSpecFromUrl("https://api.example.com/docs", { type: "none" });
+    expect(JSON.parse(text)).toEqual(openApi3Doc);
+    expect(url).toBe("https://api.example.com/v3/api-docs");
   });
 
   it("throws a clear, actionable error when the HTML page's spec can't be discovered at all", async () => {

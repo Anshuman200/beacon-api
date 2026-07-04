@@ -91,11 +91,15 @@ interface Props {
   onSend: (req: ApiRequest) => Promise<ProbeResponse>;
   onUpdateChecklist: (checklist: OwaspChecklistItem[]) => void;
   onUpdateAuthMatrixBaseline: (baseline: AuthMatrixSnapshot[]) => void;
+  /** Persists the one-time opt-in toggle for auto-running advanced (active-payload) probes on every Execute. */
+  onUpdateAutoActiveProbes: (value: boolean) => void;
   /** Controlled from SeederWorkspace so "View Results" can live in the always-visible metrics bar instead of inside this tab. */
   resultsDrawerOpen: boolean;
   onResultsDrawerOpenChange: (open: boolean) => void;
-  /** Bumped by SeederWorkspace each time this request's own Execute run finishes — triggers the safe checks automatically, no click required. */
+  /** Bumped by SeederWorkspace each time this request's own Execute run finishes — triggers the safe checks (and, if opted in, advanced probes) automatically, no click required. */
   autoScanSignal: number;
+  /** Bumped by SeederWorkspace's metrics-bar "Run Full Scan" button — triggers the exact same manual full-scan flow as the button inside this tab, so the feature is reachable without opening the Security tab first. */
+  manualFullScanSignal: number;
 }
 
 export default function SecurityPanel({
@@ -104,8 +108,10 @@ export default function SecurityPanel({
   onSend,
   onUpdateChecklist,
   onUpdateAuthMatrixBaseline,
+  onUpdateAutoActiveProbes,
   resultsDrawerOpen,
   autoScanSignal,
+  manualFullScanSignal,
   onResultsDrawerOpenChange,
 }: Props) {
   const [responseFindings, setResponseFindings] = useState<SecurityFinding[]>([]);
@@ -317,6 +323,46 @@ export default function SecurityPanel({
     return { analysis, withoutAuth, malformedToken, unexpectedMethod, contentType };
   };
 
+  /**
+   * The risky part of a full scan: active injection payloads across every
+   * enabled param/header/body, plus file-upload attack probes. Shared between
+   * the manual "Run Full Scan" button (gated by the transient, never-remembered
+   * `fullScanAuthorized` checkbox) and the automatic Execute-triggered scan
+   * (gated by the persisted, one-time `request.security.autoActiveProbes` opt-in)
+   * — same underlying action, two different consent mechanisms.
+   */
+  const runAdvancedProbes = async () => {
+    // Auto-detect every enabled param/header, plus the whole body if it's
+    // JSON/raw text — the same fields a tester would otherwise have to
+    // hand-pick one at a time in Active Probes below.
+    const fieldTargets: ProbeTarget[] = [
+      ...request.params.filter((p) => p.enabled && p.key.trim()).map((p) => ({ location: "param" as const, key: p.key })),
+      ...request.headers.filter((h) => h.enabled && h.key.trim()).map((h) => ({ location: "header" as const, key: h.key })),
+      ...((request.body?.type === "json" || request.body?.type === "raw") && request.body.rawText?.trim()
+        ? [{ location: "body" as const }]
+        : []),
+    ];
+    let activeFindings: SecurityFinding[] = [];
+    for (const target of fieldTargets) {
+      activeFindings = [...activeFindings, ...(await runSecurityProbes(request, target, AUTO_PROBE_CATEGORIES, onSend))];
+    }
+    setProbeFindings(activeFindings);
+
+    let fileFindings: SecurityFinding[] = [];
+    if (hasFileField) {
+      fileFindings = await runFileUploadProbes(
+        request,
+        { formKey: fileFieldOptions[0].value },
+        ["doubleExtension", "pathTraversalName", "spoofedContentType", "oversized"],
+        onSend
+      );
+      setFileProbeFindings(fileFindings);
+    }
+
+    setActiveKeys((prev) => Array.from(new Set([...prev, "probes", "file-probes"])));
+    return { activeFindings, fileFindings };
+  };
+
   const handleRunFullScan = async () => {
     setFullScanRunning(true);
     try {
@@ -325,37 +371,10 @@ export default function SecurityPanel({
       const response = await onSend(request);
       const { analysis, withoutAuth, malformedToken, unexpectedMethod, contentType } = await runSafeChecks(response);
 
-      let activeFindings: SecurityFinding[] = [];
-      let fileFindings: SecurityFinding[] = [];
+      const { activeFindings, fileFindings } = fullScanAuthorized
+        ? await runAdvancedProbes()
+        : { activeFindings: [] as SecurityFinding[], fileFindings: [] as SecurityFinding[] };
 
-      if (fullScanAuthorized) {
-        // Auto-detect every enabled param/header, plus the whole body if it's
-        // JSON/raw text — the same fields a tester would otherwise have to
-        // hand-pick one at a time in Active Probes below.
-        const fieldTargets: ProbeTarget[] = [
-          ...request.params.filter((p) => p.enabled && p.key.trim()).map((p) => ({ location: "param" as const, key: p.key })),
-          ...request.headers.filter((h) => h.enabled && h.key.trim()).map((h) => ({ location: "header" as const, key: h.key })),
-          ...((request.body?.type === "json" || request.body?.type === "raw") && request.body.rawText?.trim()
-            ? [{ location: "body" as const }]
-            : []),
-        ];
-        for (const target of fieldTargets) {
-          activeFindings = [...activeFindings, ...(await runSecurityProbes(request, target, AUTO_PROBE_CATEGORIES, onSend))];
-        }
-        setProbeFindings(activeFindings);
-
-        if (hasFileField) {
-          fileFindings = await runFileUploadProbes(
-            request,
-            { formKey: fileFieldOptions[0].value },
-            ["doubleExtension", "pathTraversalName", "spoofedContentType", "oversized"],
-            onSend
-          );
-          setFileProbeFindings(fileFindings);
-        }
-      }
-
-      setActiveKeys((prev) => Array.from(new Set([...prev, "probes", "file-probes"])));
       onResultsDrawerOpenChange(true);
 
       const totalIssues = [...analysis, ...withoutAuth, ...malformedToken, ...unexpectedMethod, ...contentType, ...activeFindings, ...fileFindings]
@@ -374,6 +393,9 @@ export default function SecurityPanel({
   // finishes — no click required. Guarded so it only fires on a genuine
   // completion of *this* request (same id, signal actually changed), never on
   // mount or when switching tabs to a request that already has a higher count.
+  // If the tester has opted this request into `autoActiveProbes`, the advanced
+  // (real attack-payload) checks run too — that opt-in *is* their consent, so
+  // no further confirmation is asked per-run.
   const prevAutoScanRef = useRef<{ requestId: string; signal: number } | null>(null);
   useEffect(() => {
     const prev = prevAutoScanRef.current;
@@ -384,10 +406,14 @@ export default function SecurityPanel({
     (async () => {
       try {
         const { withoutAuth, malformedToken, unexpectedMethod, contentType, analysis } = await runSafeChecks(lastResponse);
-        const totalIssues = [...analysis, ...withoutAuth, ...malformedToken, ...unexpectedMethod, ...contentType]
+        const { activeFindings, fileFindings } = request.security?.autoActiveProbes
+          ? await runAdvancedProbes()
+          : { activeFindings: [] as SecurityFinding[], fileFindings: [] as SecurityFinding[] };
+        const totalIssues = [...analysis, ...withoutAuth, ...malformedToken, ...unexpectedMethod, ...contentType, ...activeFindings, ...fileFindings]
           .filter((f) => f.severity !== "info").length;
+        const label = request.security?.autoActiveProbes ? "Auto full scan" : "Auto security check";
         toast[totalIssues > 0 ? "warning" : "success"](
-          totalIssues > 0 ? `Auto security check found ${totalIssues} potential issue(s)` : "Auto security check found no issues"
+          totalIssues > 0 ? `${label} found ${totalIssues} potential issue(s)` : `${label} found no issues`
         );
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Automatic security check failed");
@@ -395,6 +421,19 @@ export default function SecurityPanel({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoScanSignal, request.id]);
+
+  // Bumped externally by the metrics-bar "Run Full Scan" button — reuses the
+  // exact same manual flow (and the same never-remembered consent checkbox
+  // below) as the button inside this tab. Same genuine-change guard as above.
+  const prevManualFullScanRef = useRef<{ requestId: string; signal: number } | null>(null);
+  useEffect(() => {
+    const prev = prevManualFullScanRef.current;
+    const isGenuineTrigger = !!prev && prev.requestId === request.id && prev.signal !== manualFullScanSignal;
+    prevManualFullScanRef.current = { requestId: request.id, signal: manualFullScanSignal };
+    if (!isGenuineTrigger) return;
+    handleRunFullScan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualFullScanSignal, request.id]);
 
   // Maps each category's real automated signal to a hint count. Deliberately
   // conservative: only categories with findings that actually speak to that
@@ -490,6 +529,20 @@ export default function SecurityPanel({
           <Checkbox checked={fullScanAuthorized} onChange={(e) => setFullScanAuthorized(e.target.checked)} onClick={(e) => e.stopPropagation()} />
           <span className="text-[11px] text-slate-600 dark:text-slate-400">
             Also run active injection &amp; file-upload probes (sends real attack-shaped requests to every field) — I&apos;m authorized to test this API. Leave unchecked to only run the non-invasive checks.
+          </span>
+        </div>
+        <div
+          onClick={() => onUpdateAutoActiveProbes(!request.security?.autoActiveProbes)}
+          className="flex items-start gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/5 px-3 py-2 cursor-pointer"
+        >
+          <Checkbox
+            checked={!!request.security?.autoActiveProbes}
+            onChange={(e) => onUpdateAutoActiveProbes(e.target.checked)}
+            onClick={(e) => e.stopPropagation()}
+          />
+          <span className="text-[11px] text-slate-600 dark:text-slate-400">
+            <span className="font-bold text-slate-700 dark:text-slate-300">Always run advanced probes automatically for this request.</span>{" "}
+            One-time authorization — once on, every future Execute auto-runs the full scan (safe checks + active injection &amp; file-upload probes) with no further clicks. Turn off anytime.
           </span>
         </div>
         {(fullScanRan || hasChecklistActivity) && (

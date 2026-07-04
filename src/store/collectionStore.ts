@@ -111,6 +111,14 @@ export interface AuthMatrixSnapshot {
 export interface RequestSecurity {
   checklist: OwaspChecklistItem[];
   authMatrixBaseline?: AuthMatrixSnapshot[];
+  /**
+   * Opt-in, persisted per request — unlike the manual "Run Full Scan"
+   * checkbox (deliberately never remembered), this is a one-time decision the
+   * tester makes to have the *advanced* checks (active injection & file
+   * upload probes — real attack-shaped payloads) run automatically on every
+   * Execute alongside the always-safe checks. Defaults to false/unset.
+   */
+  autoActiveProbes?: boolean;
 }
 
 /** A named auth "role" (e.g. Admin/Regular User/Anonymous) tested across requests via the Authorization Matrix. */

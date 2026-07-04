@@ -12,8 +12,8 @@ import { hasFileEntry, findReservedKeyCollision, buildMultipartRequest } from "@
 import SecurityPanel from "./SecurityPanel";
 import { HTTP_METHODS, METHOD_THEMES } from "@/lib/methodThemes";
 import KeyValueTable from "./KeyValueTable";
-import { FiLoader, FiTerminal, FiDatabase, FiCheckCircle, FiXCircle, FiCpu, FiCode, FiLayers, FiPlus, FiCopy, FiAlignLeft, FiCoffee, FiTrash2, FiActivity } from "react-icons/fi";
-import { Select, Input, Button, ConfigProvider, Tabs, InputNumber, Progress, AutoComplete, Checkbox } from "antd";
+import { FiLoader, FiTerminal, FiDatabase, FiCheckCircle, FiXCircle, FiCpu, FiCode, FiLayers, FiPlus, FiCopy, FiAlignLeft, FiCoffee, FiTrash2, FiActivity, FiZap } from "react-icons/fi";
+import { Select, Input, Button, ConfigProvider, Tabs, InputNumber, Progress, AutoComplete, Checkbox, Tooltip } from "antd";
 import { toast } from "@/lib/toast";
 import confetti from "canvas-confetti";
 import { FaPlay } from "react-icons/fa";
@@ -145,6 +145,9 @@ export default function SeederWorkspace() {
   // Lifted out of SecurityPanel so "View Results" can live in the always-visible
   // metrics bar rather than being buried inside the Security tab.
   const [securityResultsDrawerOpen, setSecurityResultsDrawerOpen] = useState(false);
+  // Bumped by the metrics-bar "Run Full Scan" button to trigger SecurityPanel's
+  // manual full-scan flow without requiring the Security tab to be open first.
+  const [manualFullScanSignal, setManualFullScanSignal] = useState(0);
 
   const [copied, setCopied] = useState(false);
   const [copiedLang, setCopiedLang] = useState<string | null>(null);
@@ -1491,9 +1494,11 @@ export default function SeederWorkspace() {
                     onSend={fireSingleRequest}
                     onUpdateChecklist={(checklist) => handleUpdate({ security: { ...activeReq.security, checklist } })}
                     onUpdateAuthMatrixBaseline={(authMatrixBaseline) => handleUpdate({ security: { ...activeReq.security, authMatrixBaseline } })}
+                    onUpdateAutoActiveProbes={(autoActiveProbes) => handleUpdate({ security: { ...activeReq.security, autoActiveProbes } })}
                     resultsDrawerOpen={securityResultsDrawerOpen}
                     onResultsDrawerOpenChange={setSecurityResultsDrawerOpen}
                     autoScanSignal={activeRunState.completedSignal}
+                    manualFullScanSignal={manualFullScanSignal}
                   />
                 ),
               },
@@ -1818,16 +1823,28 @@ export default function SeederWorkspace() {
                 </span>
               </div>
             </div>
-            {activeReq.security?.checklist?.some((c) => c.status !== "not_tested") && (
-              <Button
-                size="small"
-                icon={<FiActivity />}
-                onClick={() => setSecurityResultsDrawerOpen(true)}
-                className="text-xs font-semibold shrink-0"
-              >
-                View Results
-              </Button>
-            )}
+            <div className="flex flex-col gap-1.5 shrink-0">
+              {activeReq.security?.checklist?.some((c) => c.status !== "not_tested") && (
+                <Button
+                  size="small"
+                  icon={<FiActivity />}
+                  onClick={() => setSecurityResultsDrawerOpen(true)}
+                  className="text-xs font-semibold"
+                >
+                  View Results
+                </Button>
+              )}
+              <Tooltip title="Runs response analysis, auth/hygiene checks, and the Authorization Matrix now — plus active attack probes if you've opted this request into automatic advanced scanning.">
+                <Button
+                  size="small"
+                  icon={<FiZap />}
+                  onClick={() => setManualFullScanSignal((n) => n + 1)}
+                  className="text-xs font-semibold text-indigo-500 border-indigo-500/30"
+                >
+                  Run Full Scan
+                </Button>
+              </Tooltip>
+            </div>
           </div>
         )}
 

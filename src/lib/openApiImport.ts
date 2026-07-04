@@ -116,8 +116,27 @@ interface NormalizedDoc {
   globalSecurity?: JsonObject[];
 }
 
-function normalizeOpenApi3(doc: JsonObject): NormalizedDoc {
-  const baseUrl = doc.servers?.[0]?.url || "";
+/**
+ * OpenAPI/Swagger explicitly allow a relative `servers[].url` (e.g. "/api/v1")
+ * — meaning "relative to wherever this document itself is hosted." Testers
+ * routinely paste the *docs* URL, whose origin is exactly that host, so we
+ * resolve relative URLs against `sourceUrl` (the spec's own fetch URL) rather
+ * than saving the literal relative path as base_url, which would produce an
+ * unusable environment variable like "/api/v1".
+ */
+function resolveBaseUrl(rawBaseUrl: string, sourceUrl?: string): string {
+  if (!rawBaseUrl) return sourceUrl ? new URL(sourceUrl).origin : "";
+  try {
+    new URL(rawBaseUrl); // already absolute — has its own scheme
+    return rawBaseUrl.replace(/\/$/, "");
+  } catch {
+    if (!sourceUrl) return rawBaseUrl; // nothing to resolve a relative URL against
+    return new URL(rawBaseUrl, sourceUrl).toString().replace(/\/$/, "");
+  }
+}
+
+function normalizeOpenApi3(doc: JsonObject, sourceUrl?: string): NormalizedDoc {
+  const baseUrl = resolveBaseUrl(doc.servers?.[0]?.url || "", sourceUrl);
   const securitySchemes: Record<string, SecurityScheme> = doc.components?.securitySchemes || {};
   const operations: NormalizedOperation[] = [];
 
@@ -158,9 +177,10 @@ function normalizeOpenApi3(doc: JsonObject): NormalizedDoc {
   return { baseUrl, operations, securitySchemes, globalSecurity: doc.security };
 }
 
-function normalizeSwagger2(doc: JsonObject): NormalizedDoc {
-  const scheme = doc.schemes?.[0] || "https";
-  const baseUrl = doc.host ? `${scheme}://${doc.host}${doc.basePath || ""}` : "";
+function normalizeSwagger2(doc: JsonObject, sourceUrl?: string): NormalizedDoc {
+  const scheme = doc.schemes?.[0] || (sourceUrl ? new URL(sourceUrl).protocol.replace(":", "") : "https");
+  const rawBaseUrl = doc.host ? `${scheme}://${doc.host}${doc.basePath || ""}` : (doc.basePath || "");
+  const baseUrl = resolveBaseUrl(rawBaseUrl, sourceUrl);
   const securitySchemes: Record<string, SecurityScheme> = doc.securityDefinitions || {};
   const operations: NormalizedOperation[] = [];
 
@@ -387,7 +407,7 @@ function buildCollectionFromNormalized(name: string, normalized: NormalizedDoc):
       assertions: [],
       seedMode: "repeat",
       repeatCount: 1,
-      delay: 100,
+      delay: 10,
       jsonItems: "[]",
       preRequestScript: "",
       postResponseScript: "",
@@ -420,8 +440,13 @@ function buildCollectionFromNormalized(name: string, normalized: NormalizedDoc):
   return { collection, environments: [environment] };
 }
 
-/** Parses a raw OpenAPI 3.x or Swagger 2.0 document (JSON or YAML text) into a Beacon collection. */
-export function parseOpenApiDocument(raw: string, name?: string): ImportResult {
+/**
+ * Parses a raw OpenAPI 3.x or Swagger 2.0 document (JSON or YAML text) into a
+ * Beacon collection. `sourceUrl` — the URL the spec was actually fetched from
+ * — is used to resolve a relative `servers[].url`/`basePath` into a usable
+ * absolute base_url; omit it for file uploads, where no such origin exists.
+ */
+export function parseOpenApiDocument(raw: string, name?: string, sourceUrl?: string): ImportResult {
   let doc: JsonObject;
   try {
     doc = JSON.parse(raw);
@@ -440,10 +465,10 @@ export function parseOpenApiDocument(raw: string, name?: string): ImportResult {
   const collectionName = name || resolved.info?.title || "Imported API";
 
   if (isOpenApi3(resolved)) {
-    return buildCollectionFromNormalized(collectionName, normalizeOpenApi3(resolved));
+    return buildCollectionFromNormalized(collectionName, normalizeOpenApi3(resolved, sourceUrl));
   }
   if (isSwagger2(resolved)) {
-    return buildCollectionFromNormalized(collectionName, normalizeSwagger2(resolved));
+    return buildCollectionFromNormalized(collectionName, normalizeSwagger2(resolved, sourceUrl));
   }
   throw new Error("Not an OpenAPI 3.x or Swagger 2.0 document.");
 }
@@ -507,7 +532,7 @@ function extractInitScriptSrc(html: string): string | null {
 
 const COMMON_SPEC_PATHS = ["swagger.json", "swagger/swagger.json", "v3/api-docs", "v2/api-docs", "openapi.json", "api-docs"];
 
-async function discoverSpecFromHtmlPage(pageUrl: string, html: string, headers: Record<string, string>): Promise<string> {
+async function discoverSpecFromHtmlPage(pageUrl: string, html: string, headers: Record<string, string>): Promise<{ text: string; url: string }> {
   let discovered = extractSpecUrlFromConfig(html);
 
   if (!discovered) {
@@ -522,7 +547,7 @@ async function discoverSpecFromHtmlPage(pageUrl: string, html: string, headers: 
   if (discovered) {
     const resolvedUrl = new URL(discovered, pageUrl).toString();
     const specText = await rawFetchViaProxy(resolvedUrl, headers);
-    if (!looksLikeHtml(specText)) return specText;
+    if (!looksLikeHtml(specText)) return { text: specText, url: resolvedUrl };
   }
 
   // Last resort: try the handful of conventional paths real-world frameworks
@@ -530,10 +555,11 @@ async function discoverSpecFromHtmlPage(pageUrl: string, html: string, headers: 
   const origin = new URL(pageUrl).origin;
   for (const path of COMMON_SPEC_PATHS) {
     try {
-      const candidate = await rawFetchViaProxy(`${origin}/${path}`, headers);
+      const candidateUrl = `${origin}/${path}`;
+      const candidate = await rawFetchViaProxy(candidateUrl, headers);
       if (looksLikeHtml(candidate)) continue;
       const parsed = tryParseJsonOrYaml(candidate);
-      if (parsed && isOpenApiDocument(parsed)) return candidate;
+      if (parsed && isOpenApiDocument(parsed)) return { text: candidate, url: candidateUrl };
     } catch {
       // Try the next candidate path.
     }
@@ -564,9 +590,12 @@ function tryParseJsonOrYaml(text: string): JsonObject | null {
  * Going through the proxy (rather than fetching directly from the browser)
  * both sidesteps CORS and inherits the SSRF egress guard for free.
  * Auto-discovers the real spec URL if the given one turns out to serve the
- * human-facing Swagger UI HTML page instead of the spec document.
+ * human-facing Swagger UI HTML page instead of the spec document. Returns the
+ * URL the spec was *actually* fetched from alongside its text, since that can
+ * differ from the input (via discovery) and is needed to resolve a relative
+ * `servers[].url`/`basePath` in the spec itself.
  */
-export async function fetchOpenApiSpecFromUrl(url: string, credentials: SpecFetchCredentials): Promise<string> {
+export async function fetchOpenApiSpecFromUrl(url: string, credentials: SpecFetchCredentials): Promise<{ text: string; url: string }> {
   const headers: Record<string, string> = {};
   if (credentials.type === "basic") {
     headers["Authorization"] = `Basic ${toBase64(`${credentials.username}:${credentials.password}`)}`;
@@ -578,6 +607,6 @@ export async function fetchOpenApiSpecFromUrl(url: string, credentials: SpecFetc
   if (looksLikeHtml(text)) {
     return discoverSpecFromHtmlPage(url, text, headers);
   }
-  return text;
+  return { text, url };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

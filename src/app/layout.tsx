@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
@@ -16,11 +16,26 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite",
   description: "A beautiful tool to test and seed data through API endpoints with sandboxed scripting",
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/BeaconAPI.png",
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
     shortcut: "/BeaconAPI.png",
-    apple: "/BeaconAPI.png",
+    apple: "/apple-touch-icon.png",
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Beacon API",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#040509",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

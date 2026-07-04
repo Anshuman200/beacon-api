@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { useSeederStore } from "@/store/seederStore";
+import PwaUpdateManager from "@/components/PwaUpdateManager";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const storeTheme = useSeederStore((state) => state.theme);
@@ -68,6 +69,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       >
         <App style={{ height: "100%" }}>
           {children}
+          <PwaUpdateManager />
           <Toaster
             theme={storeTheme}
             position="top-center"

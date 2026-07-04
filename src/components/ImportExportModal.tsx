@@ -77,8 +77,8 @@ export default function ImportExportModal({ open, onClose, collectionId }: Props
           : credType === "header"
             ? { type: "header", name: headerName, value: headerValue }
             : { type: "none" };
-      const raw = await fetchOpenApiSpecFromUrl(specUrl.trim(), credentials);
-      finishImport(parseOpenApiDocument(raw));
+      const { text, url } = await fetchOpenApiSpecFromUrl(specUrl.trim(), credentials);
+      finishImport(parseOpenApiDocument(text, undefined, url));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to import from URL");
     } finally {
