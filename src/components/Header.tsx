@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { Button, Tooltip, Select, App } from "antd";
-import { FiRotateCcw, FiSun, FiMoon, FiHelpCircle, FiLayers, FiSettings } from "react-icons/fi";
+import { FiRotateCcw, FiSun, FiMoon, FiHelpCircle, FiLayers, FiSettings, FiUpload } from "react-icons/fi";
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore } from "@/store/collectionStore";
 import type { AppTheme } from "@/store/seederStore";
@@ -16,12 +16,14 @@ export default function Header() {
     triggerReset,
     setTourActive,
     setEnvModalOpen,
+    openImportExport,
   } = useSeederStore();
 
   const {
     environments,
     activeEnvironmentId,
     setActiveEnvironmentId,
+    activeCollectionId,
   } = useCollectionStore();
 
   return (
@@ -98,6 +100,19 @@ export default function Header() {
               className="text-slate-550 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-405 text-xs flex items-center border border-slate-500/10 dark:border-white/5 rounded-lg px-2.5 py-1.5 hover:bg-slate-500/5"
             >
               Environments
+            </Button>
+          </Tooltip>
+
+          {/* Import / Export Button */}
+          <Tooltip title="Import / Export">
+            <Button
+              type="text"
+              aria-label="Import / Export"
+              icon={<FiUpload className="w-3.5 h-3.5" />}
+              onClick={() => openImportExport(activeCollectionId)}
+              className="text-slate-550 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-405 text-xs flex items-center border border-slate-500/10 dark:border-white/5 rounded-lg px-2.5 py-1.5 hover:bg-slate-500/5"
+            >
+              Import
             </Button>
           </Tooltip>
 

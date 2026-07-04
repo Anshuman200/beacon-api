@@ -24,6 +24,10 @@ interface SeederStore {
   triggerReset: () => void;
   envModalOpen: boolean;
   setEnvModalOpen: (open: boolean) => void;
+  importExportOpen: boolean;
+  importExportCollectionId: string | null;
+  openImportExport: (collectionId: string | null) => void;
+  setImportExportOpen: (open: boolean) => void;
 
   // Open request tabs — focuses an existing tab or opens a new one; always-open,
   // no VS-Code-style preview-tab state machine.
@@ -44,6 +48,8 @@ export const useSeederStore = create
       tourActive: false,
       resetCounter: 0,
       envModalOpen: false,
+      importExportOpen: false,
+      importExportCollectionId: null,
       openTabs: [],
 
       setActiveView: (activeView) => set({ activeView }),
@@ -56,6 +62,8 @@ export const useSeederStore = create
       setIsRunning: (isRunning) => set({ isRunning }),
       setTourActive: (tourActive) => set({ tourActive }),
       setEnvModalOpen: (envModalOpen) => set({ envModalOpen }),
+      openImportExport: (collectionId) => set({ importExportOpen: true, importExportCollectionId: collectionId }),
+      setImportExportOpen: (importExportOpen) => set({ importExportOpen }),
 
       triggerReset: () => {
         // Reset collection workspace variables, requests, and history

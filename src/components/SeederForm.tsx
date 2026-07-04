@@ -6,11 +6,21 @@ import { useCollectionStore } from "@/store/collectionStore";
 import SeederWorkspace from "./SeederWorkspace";
 import CollectionRunner from "./CollectionRunner";
 import EnvironmentModal from "./EnvironmentModal";
+import ImportExportModal from "./ImportExportModal";
 import RequestSidebar from "./RequestSidebar";
 import RequestTabStrip from "./RequestTabStrip";
 
 export default function SeederForm() {
-  const { activeView, envModalOpen, setEnvModalOpen, openTabs, openTab } = useSeederStore();
+  const {
+    activeView,
+    envModalOpen,
+    setEnvModalOpen,
+    importExportOpen,
+    setImportExportOpen,
+    importExportCollectionId,
+    openTabs,
+    openTab,
+  } = useSeederStore();
   const { activeCollectionId, activeRequestId } = useCollectionStore();
 
   // A fresh workspace (or very first session) has an active request but no
@@ -48,7 +58,14 @@ export default function SeederForm() {
         open={envModalOpen}
         onClose={() => setEnvModalOpen(false)}
       />
-      
+
+      {/* ── IMPORT / EXPORT DRAWER ── */}
+      <ImportExportModal
+        open={importExportOpen}
+        onClose={() => setImportExportOpen(false)}
+        collectionId={importExportCollectionId}
+      />
+
     </div>
   );
 }

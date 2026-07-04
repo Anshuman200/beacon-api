@@ -7,14 +7,13 @@ import { DEMO_REQUESTS, DEMO_ENVIRONMENT } from "@/lib/demoData";
 import {
   FiPlus, FiTrash2, FiCopy, FiSearch, FiClock, FiPlay,
   FiActivity, FiZap, FiEdit2, FiCheck, FiX, FiChevronDown, FiChevronRight,
-  FiFolder, FiFolderPlus, FiMove, FiUpload, FiDownload,
+  FiFolder, FiFolderPlus, FiMove, FiDownload,
 } from "react-icons/fi";
 import { Button, Input, Tooltip, Popconfirm, Segmented, Dropdown } from "antd";
 import { toast } from "@/lib/toast";
-import ImportExportModal from "./ImportExportModal";
 
 export default function RequestSidebar() {
-  const { activeView, setActiveView, isRunning } = useSeederStore();
+  const { activeView, setActiveView, isRunning, openImportExport } = useSeederStore();
 
   const {
     collections,
@@ -58,15 +57,6 @@ export default function RequestSidebar() {
   const [draftFolderName, setDraftFolderName] = useState("");
 
   const [loadingDemo, setLoadingDemo] = useState(false);
-
-  // Import/Export drawer state
-  const [importExportOpen, setImportExportOpen] = useState(false);
-  const [exportCollectionId, setExportCollectionId] = useState<string | null>(null);
-
-  const openImportExport = (colId: string | null) => {
-    setExportCollectionId(colId);
-    setImportExportOpen(true);
-  };
 
   // ── Helpers ──
   const isExpanded = (colId: string) => !collapsedIds.has(colId);
@@ -283,15 +273,6 @@ export default function RequestSidebar() {
         />
         {sidebarTab === "requests" && (
           <>
-            <Tooltip title="Import / Export">
-              <Button
-                size="small"
-                aria-label="Import / Export"
-                icon={<FiUpload className="w-3.5 h-3.5" />}
-                onClick={() => openImportExport(activeCollectionId)}
-                className="flex items-center justify-center shrink-0 border-slate-500/20 dark:border-white/10 text-indigo-500"
-              />
-            </Tooltip>
             <Tooltip title="New Collection">
               <Button
                 size="small"
@@ -791,12 +772,6 @@ export default function RequestSidebar() {
         </Button>
 
       </div>
-
-      <ImportExportModal
-        open={importExportOpen}
-        onClose={() => setImportExportOpen(false)}
-        collectionId={exportCollectionId}
-      />
     </div>
   );
 }
