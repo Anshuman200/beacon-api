@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
-import { SITE_URL, SITE_TITLE, SITE_DESCRIPTION, SITE_AUTHOR, PUBLISHED_TIME, THEME_COLOR, ICONS, APP_SHORT_NAME } from "@/lib/site";
+import { SITE_URL, SITE_TITLE, SITE_DESCRIPTION, SITE_AUTHOR, SITE_AUTHOR_URL, PUBLISHED_TIME, THEME_COLOR, ICONS, APP_SHORT_NAME } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
-  authors: [{ name: SITE_AUTHOR }],
+  authors: [{ name: SITE_AUTHOR, url: SITE_AUTHOR_URL }],
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

@@ -1,5 +1,5 @@
 import { FiHeart } from "react-icons/fi";
-import { APP_VERSION } from "@/lib/site";
+import { APP_VERSION, SITE_AUTHOR_URL } from "@/lib/site";
 
 /**
  * Slim status-bar-style footer — server component, no interactivity needed.
@@ -13,7 +13,16 @@ export default function Footer() {
   return (
     <footer className="shrink-0 border-t border-slate-500/10 dark:border-white/[0.06] bg-white/70 dark:bg-[#07080f]/85 backdrop-blur-xl px-4 h-8 flex items-center justify-between text-[11px] text-slate-550 dark:text-slate-400">
       <p className="flex items-center gap-1.5 truncate">
-        Made with <FiHeart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" /> by Ansh, for the world.
+        Made with <FiHeart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" /> by{" "}
+        <a
+          href={SITE_AUTHOR_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-slate-700 dark:text-slate-300 hover:text-cyan-500 dark:hover:text-cyan-400 underline decoration-dotted underline-offset-2 transition-colors"
+        >
+          Ansh
+        </a>
+        , for the world.
       </p>
       <p className="flex items-center gap-2 shrink-0 font-mono">
         <span className="font-semibold">v{APP_VERSION}</span>

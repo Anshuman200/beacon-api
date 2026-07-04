@@ -20,11 +20,13 @@ export const APP_TAGLINE = appConfig.tagline;
 export const THEME_COLOR = appConfig.themeColor;
 export const BACKGROUND_COLOR = appConfig.backgroundColor;
 export const ICONS = appConfig.icons;
+export const SCREENSHOTS = appConfig.screenshots;
 
 export const SITE_URL = appConfig.url;
 export const SITE_TITLE = appConfig.title;
 export const SITE_DESCRIPTION = appConfig.description;
 export const SITE_AUTHOR = appConfig.author.name;
+export const SITE_AUTHOR_URL = appConfig.author.url;
 export const SECURITY_CONTACT = appConfig.author.email;
 export const SECURITY_EXPIRES_IN_DAYS = appConfig.security.expiresInDays;
 // The project's first commit — a genuine "launch date" rather than a made-up one.
