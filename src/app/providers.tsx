@@ -3,44 +3,18 @@
 import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { ConfigProvider, App, theme as antdTheme } from "antd";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { useSeederStore } from "@/store/seederStore";
 
 export default function Providers({ children }: { children: ReactNode }) {
   const storeTheme = useSeederStore((state) => state.theme);
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
-    const applyTheme = (t: "light" | "dark" | "system") => {
-      let resolved: "light" | "dark" = "dark";
-      if (t === "system") {
-        resolved = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-      } else {
-        resolved = t;
-      }
-      
-      setResolvedTheme(resolved);
-
-      const root = document.documentElement;
-      if (resolved === "dark") {
-        root.classList.add("dark");
-      } else {
-        root.classList.remove("dark");
-      }
-    };
-
-    applyTheme(storeTheme);
-
-    if (storeTheme === "system") {
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handleChange = () => applyTheme("system");
-      mediaQuery.addEventListener("change", handleChange);
-      return () => mediaQuery.removeEventListener("change", handleChange);
-    }
+    document.documentElement.classList.toggle("dark", storeTheme === "dark");
   }, [storeTheme]);
 
-  const isDark = resolvedTheme === "dark";
+  const isDark = storeTheme === "dark";
   const algorithm = isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm;
 
   return (
@@ -95,7 +69,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         <App style={{ height: "100%" }}>
           {children}
           <Toaster
-            theme={resolvedTheme}
+            theme={storeTheme}
             position="top-center"
             richColors
             closeButton

@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { encryptData, decryptData } from "@/lib/crypto";
 import { useCollectionStore } from "./collectionStore";
 
-export type AppTheme = "system" | "light" | "dark";
+export type AppTheme =  "light" | "dark";
 export type WorkspaceView = "client" | "runner";
 
 export interface OpenTab {
@@ -39,7 +39,7 @@ export const useSeederStore = create
   persist(
     (set, get) => ({
       activeView: "client",
-      theme: "system",
+      theme: "dark",
       isRunning: false,
       tourActive: false,
       resetCounter: 0,
@@ -125,6 +125,17 @@ export const useSeederStore = create
           removeItem: (name) => localStorage.removeItem(name),
         };
       }),
+      // No version/migrate system here (unlike collectionStore) — this is the
+      // one field that used to have a third value ("system", removed). A
+      // browser that persisted that before now falls back to the new default
+      // (dark) instead of carrying an invalid theme forward forever.
+      merge: (persisted, current) => {
+        const state = { ...current, ...(persisted as Partial<SeederStore>) };
+        if (state.theme !== "light" && state.theme !== "dark") {
+          state.theme = "dark";
+        }
+        return state;
+      },
     }
   )
 );

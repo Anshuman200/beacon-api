@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { Button, Tooltip, Select, App } from "antd";
-import { FiRotateCcw, FiSun, FiMoon, FiMonitor, FiHelpCircle, FiLayers, FiSettings } from "react-icons/fi";
+import { FiRotateCcw, FiSun, FiMoon, FiHelpCircle, FiLayers, FiSettings } from "react-icons/fi";
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore } from "@/store/collectionStore";
 import type { AppTheme } from "@/store/seederStore";
@@ -128,16 +128,14 @@ export default function Header() {
 
           {/* Theme Toggle */}
           {(() => {
-            const order: AppTheme[] = ["light", "dark", "system"];
+            const order: AppTheme[] = ["light", "dark"];
             const icons: Record<AppTheme, React.ReactNode> = {
               light: <FiSun className="w-[15px] h-[15px]" />,
               dark: <FiMoon className="w-[15px] h-[15px]" />,
-              system: <FiMonitor className="w-[15px] h-[15px]" />,
             };
             const labels: Record<AppTheme, string> = {
               light: "Light",
               dark: "Dark",
-              system: "System",
             };
             return (
               <Tooltip title={`${labels[theme]} theme — click to switch`}>

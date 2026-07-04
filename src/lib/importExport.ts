@@ -10,6 +10,7 @@ import {
   defaultOAuth2Config,
   defaultOwaspChecklist,
 } from "@/store/collectionStore";
+import { isOpenApiDocument, parseOpenApiDocument } from "@/lib/openApiImport";
 
 const genId = (prefix: string) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 
@@ -365,14 +366,31 @@ export function importPostmanCollection(json: string): ImportResult {
   return { collection, environments: [] };
 }
 
-/** Auto-detects the export format and imports accordingly. */
+/**
+ * Auto-detects the export format and imports accordingly. OpenAPI/Swagger
+ * documents are commonly YAML, so the JSON-parse-first, JSON-only formats
+ * (Beacon/Postman) are tried before falling through to the OpenAPI path,
+ * which handles both JSON and YAML itself.
+ */
 export function importCollectionFile(json: string): ImportResult {
-  const data = JSON.parse(json);
-  if (isBeaconExport(data)) {
-    return remapIds(withFolders(data.collection), data.environments || []);
+  try {
+    const data = JSON.parse(json);
+    if (isBeaconExport(data)) {
+      return remapIds(withFolders(data.collection), data.environments || []);
+    }
+    if (isPostmanExport(data)) {
+      return importPostmanCollection(json);
+    }
+    if (isOpenApiDocument(data)) {
+      return parseOpenApiDocument(json);
+    }
+  } catch {
+    // Not valid JSON at all — most likely a YAML OpenAPI/Swagger document;
+    // fall through to parseOpenApiDocument, which tries YAML itself.
   }
-  if (isPostmanExport(data)) {
-    return importPostmanCollection(json);
+  try {
+    return parseOpenApiDocument(json);
+  } catch {
+    throw new Error("Unrecognized collection format — expected a Beacon export, Postman v2.1 collection, or OpenAPI/Swagger document");
   }
-  throw new Error("Unrecognized collection format — expected a Beacon or Postman v2.1 export");
 }

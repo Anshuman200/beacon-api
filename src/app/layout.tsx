@@ -35,8 +35,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
             try {
-              var t = localStorage.getItem('beacon-theme') || 'system';
-              var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+              // Only "light" opts out — no value yet, or a stale "system" from
+              // before that option was removed, both default to dark.
+              var dark = localStorage.getItem('beacon-theme') !== 'light';
               if (dark) document.documentElement.classList.add('dark');
             } catch(e){}
           })();
