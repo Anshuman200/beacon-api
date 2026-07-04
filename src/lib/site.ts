@@ -31,3 +31,4 @@ export const SECURITY_CONTACT = appConfig.author.email;
 export const SECURITY_EXPIRES_IN_DAYS = appConfig.security.expiresInDays;
 // The project's first commit — a genuine "launch date" rather than a made-up one.
 export const PUBLISHED_TIME = appConfig.publishedTime;
+export const GA_MEASUREMENT_ID = appConfig.analytics.gaMeasurementId;

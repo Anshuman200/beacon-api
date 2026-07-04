@@ -1,8 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import Providers from "./providers";
-import { SITE_URL, SITE_TITLE, SITE_DESCRIPTION, SITE_AUTHOR, SITE_AUTHOR_URL, PUBLISHED_TIME, THEME_COLOR, ICONS, APP_SHORT_NAME } from "@/lib/site";
+import { SITE_URL, SITE_TITLE, SITE_DESCRIPTION, SITE_AUTHOR, SITE_AUTHOR_URL, PUBLISHED_TIME, THEME_COLOR, ICONS, APP_SHORT_NAME, GA_MEASUREMENT_ID } from "@/lib/site";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -94,6 +95,7 @@ export default function RootLayout({
           {children}
         </Providers>
       </body>
+      <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
     </html>
   );
 }
