@@ -805,7 +805,7 @@ export default function SeederWorkspace() {
         </div>
 
         {/* Method & URL Input Bar */}
-        <div className="flex gap-2 mb-4 shrink-0">
+        <div className="flex gap-2 mb-4 shrink-0" data-tour="method-url">
           <ConfigProvider
             theme={{
               components: {
@@ -860,7 +860,7 @@ export default function SeederWorkspace() {
         </div>
 
         {/* Workspace Config Tabs */}
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.005] overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.005] overflow-hidden" data-tour="request-tabs">
           <Tabs
             defaultActiveKey="params"
             size="small"
@@ -1729,7 +1729,7 @@ export default function SeederWorkspace() {
         </div>
 
         {/* Trigger Execute Buttons */}
-        <div className="mt-4 flex gap-2 shrink-0 w-full md:max-w-xl mx-auto">
+        <div className="mt-4 flex gap-2 shrink-0 w-full md:max-w-xl mx-auto" data-tour="execute-btn">
           {isRunning ? (
             <Button
               danger
@@ -1849,7 +1849,7 @@ export default function SeederWorkspace() {
         )}
 
         {/* Response Tabs — always visible */}
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.003]">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.003]" data-tour="response-panel">
           <Tabs
             activeKey={responseTab}
             onChange={(key) => setResponseTab(key as "body" | "headers" | "tests" | "codegen" | "console")}

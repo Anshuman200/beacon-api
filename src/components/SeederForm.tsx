@@ -7,6 +7,7 @@ import SeederWorkspace from "./SeederWorkspace";
 import CollectionRunner from "./CollectionRunner";
 import EnvironmentModal from "./EnvironmentModal";
 import ImportExportModal from "./ImportExportModal";
+import ProductTour from "./ProductTour";
 import RequestSidebar from "./RequestSidebar";
 import RequestTabStrip from "./RequestTabStrip";
 
@@ -65,6 +66,8 @@ export default function SeederForm() {
         onClose={() => setImportExportOpen(false)}
         collectionId={importExportCollectionId}
       />
+
+      <ProductTour />
 
     </div>
   );

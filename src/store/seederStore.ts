@@ -20,6 +20,9 @@ interface SeederStore {
   setIsRunning: (isRunning: boolean) => void;
   tourActive: boolean;
   setTourActive: (active: boolean) => void;
+  /** Persisted so the tour auto-starts once for a first-time visitor and never again on its own. */
+  hasSeenTour: boolean;
+  setHasSeenTour: (seen: boolean) => void;
   resetCounter: number;
   triggerReset: () => void;
   envModalOpen: boolean;
@@ -46,6 +49,7 @@ export const useSeederStore = create
       theme: "dark",
       isRunning: false,
       tourActive: false,
+      hasSeenTour: false,
       resetCounter: 0,
       envModalOpen: false,
       importExportOpen: false,
@@ -61,6 +65,7 @@ export const useSeederStore = create
       },
       setIsRunning: (isRunning) => set({ isRunning }),
       setTourActive: (tourActive) => set({ tourActive }),
+      setHasSeenTour: (hasSeenTour) => set({ hasSeenTour }),
       setEnvModalOpen: (envModalOpen) => set({ envModalOpen }),
       openImportExport: (collectionId) => set({ importExportOpen: true, importExportCollectionId: collectionId }),
       setImportExportOpen: (importExportOpen) => set({ importExportOpen }),

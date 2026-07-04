@@ -62,7 +62,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
 
           {/* Environment Selector Dropdown */}
-          <div className="flex items-center gap-2 mr-2">
+          <div className="flex items-center gap-2 mr-2" data-tour="env-selector">
             <Select
               size="large"
               value={activeEnvironmentId || "no_env"}
@@ -109,6 +109,7 @@ export default function Header() {
             <Button
               type="text"
               aria-label="Import / Export"
+              data-tour="import-btn"
               icon={<FiUpload className="w-3.5 h-3.5" />}
               onClick={() => openImportExport(activeCollectionId)}
               className="text-slate-550 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-405 text-xs flex items-center border border-slate-500/10 dark:border-white/5 rounded-lg px-2.5 py-1.5 hover:bg-slate-500/5"
@@ -157,6 +158,7 @@ export default function Header() {
               <Tooltip title={`${labels[theme]} theme — click to switch`}>
                 <button
                   type="button"
+                  data-tour="theme-toggle"
                   onClick={() => setTheme(order[(order.indexOf(theme) + 1) % order.length])}
                   className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100/80 dark:bg-white/[0.05] border border-slate-200 dark:border-white/[0.08] hover:bg-slate-200 dark:hover:bg-white/[0.09] hover:border-slate-300 dark:hover:border-white/[0.15] transition-all duration-200 cursor-pointer text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                 >

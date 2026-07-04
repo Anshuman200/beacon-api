@@ -228,7 +228,7 @@ export default function RequestSidebar() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-500/5 dark:bg-white/[0.015] border-r border-slate-500/10 dark:border-white/[0.06] overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-slate-500/5 dark:bg-white/[0.015] border-r border-slate-500/10 dark:border-white/[0.06] overflow-hidden" data-tour="sidebar">
 
       {/* Tab switcher */}
       <div className="p-3 border-b border-slate-500/10 dark:border-white/[0.06] shrink-0">
@@ -276,6 +276,7 @@ export default function RequestSidebar() {
             <Tooltip title="New Collection">
               <Button
                 size="small"
+                data-tour="new-collection"
                 icon={<FiFolderPlus className="w-3.5 h-3.5" />}
                 onClick={handleAddCollection}
                 disabled={isRunning}

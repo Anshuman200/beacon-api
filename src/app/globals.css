@@ -240,3 +240,85 @@ body {
 .dark .environment-drawer .ant-drawer-body {
   background: transparent;
 }
+
+/* ── Product Tour (driver.js) — match the app's premium dark/cyan look ──── */
+.driver-popover {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
+  font-family: var(--font-sans, inherit);
+  padding: 16px;
+}
+.dark .driver-popover {
+  background-color: #0d1020;
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.driver-popover-title {
+  font-weight: 900;
+  font-size: 14px;
+  color: #0f172a;
+}
+.dark .driver-popover-title {
+  color: #ffffff;
+}
+.driver-popover-description {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #475569;
+}
+.dark .driver-popover-description {
+  color: #94a3b8;
+}
+.driver-popover-progress-text {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.driver-popover-footer button {
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: transparent;
+  color: inherit;
+  text-shadow: none;
+  padding: 4px 12px;
+}
+.dark .driver-popover-footer button {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.driver-popover-next-btn,
+.driver-popover-next-btn:hover {
+  background: #00c2ff !important;
+  color: #04101a !important;
+  border-color: transparent !important;
+}
+.driver-popover-close-btn {
+  color: #94a3b8;
+}
+.driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: #ffffff;
+}
+.dark .driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: #0d1020;
+}
+.driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: #ffffff;
+}
+.dark .driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: #0d1020;
+}
+.driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: #ffffff;
+}
+.dark .driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: #0d1020;
+}
+.driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: #ffffff;
+}
+.dark .driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: #0d1020;
+}
