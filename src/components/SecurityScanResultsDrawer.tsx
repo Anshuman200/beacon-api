@@ -127,7 +127,7 @@ export default function SecurityScanResultsDrawer({
       open={open}
       onClose={onClose}
       placement="right"
-      width={480}
+      size={480}
       extra={
         <Button size="small" icon={<FiDownload />} onClick={onExportReport} className="text-xs font-semibold">
           Export Report

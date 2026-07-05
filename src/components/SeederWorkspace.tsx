@@ -1774,7 +1774,7 @@ export default function SeederWorkspace() {
                 size="small"
                 showInfo={false}
                 strokeColor="#6366f1"
-                trailColor="rgba(255,255,255,0.05)"
+                railColor="rgba(255,255,255,0.05)"
                 className="mt-1.5"
               />
               <div className="flex gap-4 mt-1 text-[10px] text-slate-550">

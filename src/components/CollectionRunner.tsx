@@ -635,7 +635,7 @@ export default function CollectionRunner() {
               size="small" 
               showInfo={false} 
               strokeColor="#6366f1"
-              trailColor="rgba(0,0,0,0.05)" 
+              railColor="rgba(0,0,0,0.05)" 
               className="mb-1"
             />
           </div>

@@ -38,8 +38,10 @@ self.addEventListener("message", (event) => {
 });
 
 // Network-first for page navigations (testers should always get the latest
-// build when online); same-origin static assets fall back to cache-first so
-// the shell still loads if the network drops mid-session.
+// build when online); same-origin static assets (the JS/CSS the page needs
+// to actually render and hydrate — not just the HTML shell) use
+// stale-while-revalidate, so once they've been fetched once, the app keeps
+// working if the network drops or is unavailable on a later visit.
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
@@ -50,6 +52,19 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
+
+  event.respondWith(
+    caches.open(SHELL_CACHE).then(async (cache) => {
+      const cached = await cache.match(request);
+      const networkFetch = fetch(request)
+        .then((response) => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        })
+        .catch(() => cached);
+      return cached || networkFetch;
+    })
+  );
 });
 `.trim();
 

@@ -207,7 +207,7 @@ export default function Header() {
       <Drawer
         title="Menu"
         placement="right"
-        width={280}
+        size={280}
         open={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
         className="sm:hidden"
