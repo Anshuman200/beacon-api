@@ -214,22 +214,30 @@ body {
   transition: background 0.3s ease, border-color 0.3s ease;
 }
 
-/* ── Ant Design Tabs Height Fixes ────────────────────────── */
-.ant-tabs.h-full {
-  display: flex;
-  flex-direction: column;
-}
-.ant-tabs.h-full > .ant-tabs-content-holder {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.ant-tabs.h-full > .ant-tabs-content-holder > .ant-tabs-content {
-  height: 100%;
-}
-.ant-tabs.h-full > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
-  height: 100%;
+/* ── Ant Design Tabs Height Fixes ────────────────────────────────────────
+   Only meaningful at the lg+ fixed-viewport split-pane layout (see
+   SeederForm.tsx/SeederWorkspace.tsx) — below lg the page scrolls
+   naturally instead, so these Tabs are left to their natural content
+   height there. Keyed off a stable `.workspace-tabs` marker rather than
+   Tailwind's `lg:h-full` utility class directly, since that literal class
+   token only exists in the compiled CSS/DOM as `lg\:h-full`. */
+@media (min-width: 1024px) {
+  .ant-tabs.workspace-tabs {
+    display: flex;
+    flex-direction: column;
+  }
+  .ant-tabs.workspace-tabs > .ant-tabs-content-holder {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .ant-tabs.workspace-tabs > .ant-tabs-content-holder > .ant-tabs-content {
+    height: 100%;
+  }
+  .ant-tabs.workspace-tabs > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+    height: 100%;
+  }
 }
 
 /* ── Environment Drawer — Dark Mode ─────────────────────── */

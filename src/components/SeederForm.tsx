@@ -35,7 +35,7 @@ export default function SeederForm() {
   }, []);
 
   return (
-    <div className="w-full flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden bg-slate-900/5 dark:bg-[#040509]">
+    <div className="w-full flex-1 lg:min-h-0 flex flex-col lg:flex-row lg:overflow-hidden bg-slate-900/5 dark:bg-[#040509]">
 
       {/* ── PERSISTENT LEFT SIDEBAR ── */}
       <div className="w-full lg:w-72 shrink-0 border-b lg:border-b-0 lg:h-full lg:min-h-0">
@@ -43,9 +43,9 @@ export default function SeederForm() {
       </div>
 
       {/* ── MAIN WORKSPACE workbench ── */}
-      <main className="flex-1 h-full overflow-hidden min-h-0 relative z-10 flex flex-col">
+      <main className="flex-1 lg:h-full lg:overflow-hidden lg:min-h-0 relative z-10 flex flex-col">
         {activeView === "client" && <RequestTabStrip />}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 lg:min-h-0">
           {activeView === "client" ? (
             <SeederWorkspace />
           ) : (

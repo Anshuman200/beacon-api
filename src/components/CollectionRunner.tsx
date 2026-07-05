@@ -473,10 +473,10 @@ export default function CollectionRunner() {
     : 0;
 
   return (
-    <div className="w-full px-5 py-5 flex flex-col lg:flex-row gap-5 h-full min-h-0 overflow-hidden bg-slate-500/[0.005] dark:bg-[#07080f]/40">
-      
+    <div className="w-full px-5 py-5 flex flex-col lg:flex-row gap-5 lg:h-full lg:min-h-0 lg:overflow-hidden bg-slate-500/[0.005] dark:bg-[#07080f]/40">
+
       {/* ── LEFT PANEL: RUNNER SETTINGS & TARGET CHECKLIST ── */}
-      <div className="w-full lg:w-80 shrink-0 flex flex-col gap-3 h-full min-h-0 bg-white/40 dark:bg-white/[0.01] border border-slate-500/10 dark:border-white/[0.06] rounded-2xl p-4 overflow-hidden shadow-sm">
+      <div className="w-full lg:w-80 shrink-0 flex flex-col gap-3 lg:h-full lg:min-h-0 bg-white/40 dark:bg-white/[0.01] border border-slate-500/10 dark:border-white/[0.06] rounded-2xl p-4 lg:overflow-hidden shadow-sm">
         
         <div className="flex items-center justify-between border-b border-slate-500/10 dark:border-white/[0.05] pb-2 shrink-0">
           <div className="min-w-0">
@@ -526,7 +526,7 @@ export default function CollectionRunner() {
         </div>
 
         {/* Selection Checklist */}
-        <div className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 flex flex-col lg:min-h-0">
           <div className="flex items-center justify-between px-1.5 py-1 text-[10px] font-bold text-slate-550 dark:text-slate-450 shrink-0">
             <Checkbox
               checked={selectedReqIds.length === requests.length && requests.length > 0}
@@ -539,7 +539,7 @@ export default function CollectionRunner() {
             <span>{selectedReqIds.length} Selected</span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0 border border-slate-500/10 dark:border-white/[0.05] rounded-xl p-2 bg-slate-500/[0.01] dark:bg-white/[0.005]">
+          <div className="flex-1 lg:overflow-y-auto space-y-1.5 pr-1 lg:min-h-0 border border-slate-500/10 dark:border-white/[0.05] rounded-xl p-2 bg-slate-500/[0.01] dark:bg-white/[0.005]">
             {requests.length === 0 ? (
               <div className="text-center py-8 text-xs text-slate-500">
                 Create requests in the workspace builder first.
@@ -615,7 +615,7 @@ export default function CollectionRunner() {
       </div>
 
       {/* ── RIGHT PANEL: METRICS & VISUAL RESULTS CHECKLIST ── */}
-      <div className="flex-1 flex flex-col gap-3 h-full min-h-0 bg-white/40 dark:bg-white/[0.01] border border-slate-500/10 dark:border-white/[0.06] rounded-2xl p-5 overflow-hidden shadow-sm">
+      <div className="flex-1 flex flex-col gap-3 lg:h-full lg:min-h-0 bg-white/40 dark:bg-white/[0.01] border border-slate-500/10 dark:border-white/[0.06] rounded-2xl p-5 lg:overflow-hidden shadow-sm">
         
         {/* Statistics Panels */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
@@ -695,7 +695,7 @@ export default function CollectionRunner() {
         </div>
 
         {/* Clean pass/fail execution results card list */}
-        <div className="flex-1 flex flex-col border border-slate-500/10 dark:border-white/[0.06] rounded-2xl overflow-hidden bg-slate-500/[0.01] dark:bg-white/[0.002] min-h-0">
+        <div className="flex-1 flex flex-col border border-slate-500/10 dark:border-white/[0.06] rounded-2xl lg:overflow-hidden bg-slate-500/[0.01] dark:bg-white/[0.002] lg:min-h-0">
           
           {/* List Header */}
           <div className="px-4 py-2.5 bg-slate-500/5 dark:bg-white/[0.015] border-b border-slate-500/10 dark:border-white/[0.05] flex items-center justify-between shrink-0">
@@ -716,7 +716,7 @@ export default function CollectionRunner() {
           </div>
 
           {/* Cards List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5 min-h-0 bg-slate-500/[0.005] dark:bg-[#07080f]/10">
+          <div className="flex-1 lg:overflow-y-auto p-4 space-y-2.5 lg:min-h-0 bg-slate-500/[0.005] dark:bg-[#07080f]/10">
             {runnerLogs.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-slate-500 dark:text-slate-650 gap-2 py-12">
                 <FiTrendingUp className="w-8 h-8 opacity-20 animate-pulse" />

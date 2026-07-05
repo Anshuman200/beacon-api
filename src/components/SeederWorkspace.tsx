@@ -783,10 +783,10 @@ export default function SeederWorkspace() {
   }
 
   return (
-    <div className="w-full flex flex-col lg:flex-row h-full overflow-hidden min-h-0">
+    <div className="w-full flex flex-col lg:flex-row lg:h-full lg:overflow-hidden lg:min-h-0">
 
       {/* ── PANEL: REQUEST BUILDER (50%) ── */}
-      <div className="w-full lg:w-1/2 h-full flex flex-col border-r border-slate-500/10 dark:border-white/[0.06] overflow-hidden min-h-0 bg-slate-500/[0.005] dark:bg-[#07080f]/40 p-4">
+      <div className="w-full lg:w-1/2 lg:h-full flex flex-col border-r border-slate-500/10 dark:border-white/[0.06] lg:overflow-hidden lg:min-h-0 bg-slate-500/[0.005] dark:bg-[#07080f]/40 p-4">
 
         {/* Editable Title */}
         <div className="flex items-center gap-3 mb-3 shrink-0">
@@ -860,12 +860,12 @@ export default function SeederWorkspace() {
         </div>
 
         {/* Workspace Config Tabs */}
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.005] overflow-hidden" data-tour="request-tabs">
+        <div className="flex-1 flex flex-col lg:overflow-hidden lg:min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.005]" data-tour="request-tabs">
           <Tabs
             defaultActiveKey="params"
             size="small"
             centered
-            className="h-full flex flex-col overflow-hidden min-h-0"
+            className="workspace-tabs lg:h-full flex flex-col lg:overflow-hidden lg:min-h-0"
             tabBarStyle={{ marginBottom: 0 }}
             items={[
               {
@@ -1755,7 +1755,7 @@ export default function SeederWorkspace() {
       </div>
 
       {/* ── PANEL 3: RESPONSE PANEL ── */}
-      <div className="w-full lg:w-1/2 h-full flex flex-col overflow-hidden min-h-0 bg-slate-500/5 dark:bg-white/[0.002] p-4">
+      <div className="w-full lg:w-1/2 lg:h-full flex flex-col lg:overflow-hidden lg:min-h-0 bg-slate-500/5 dark:bg-white/[0.002] p-4">
 
         {/* Seeder live status indicator */}
         {isRunning && (
@@ -1849,13 +1849,13 @@ export default function SeederWorkspace() {
         )}
 
         {/* Response Tabs — always visible */}
-        <div className="flex-1 flex flex-col overflow-hidden min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.003]" data-tour="response-panel">
+        <div className="flex-1 flex flex-col lg:overflow-hidden lg:min-h-0 border border-slate-500/10 dark:border-white/[0.06] rounded-2xl bg-white/40 dark:bg-white/[0.003]" data-tour="response-panel">
           <Tabs
             activeKey={responseTab}
             onChange={(key) => setResponseTab(key as "body" | "headers" | "tests" | "codegen" | "console")}
             size="small"
             centered
-            className="h-full flex flex-col overflow-hidden min-h-0"
+            className="workspace-tabs lg:h-full flex flex-col lg:overflow-hidden lg:min-h-0"
             tabBarStyle={{ marginBottom: 0 }}
             items={[
               {

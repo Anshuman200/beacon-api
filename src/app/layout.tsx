@@ -90,7 +90,7 @@ export default function RootLayout({
           })();
         `}} />
       </head>
-      <body className="h-dvh flex flex-col overflow-hidden antialiased">
+      <body className="h-dvh flex flex-col antialiased">
         <Providers>
           {children}
         </Providers>
