@@ -1,23 +1,26 @@
 export interface ChangelogEntry {
-  /** Human-readable release label — a date is enough since this project doesn't run semver. */
+  /** Human-readable release label. */
   version: string;
   highlights: string[];
 }
 
 /**
- * Maintained by hand, one entry per deploy that's worth telling testers
- * about — surfaced in the "Update Available" banner's "What's new" section
- * via /version.json. Newest first. Keep entries short: 3-5 punchy bullets,
- * not a full commit log.
+ * Real commit history for this build — captured at build time (see
+ * next.config.ts's resolveRecentCommits) and baked into
+ * NEXT_PUBLIC_BUILD_COMMITS, rather than a hand-maintained list that's
+ * accurate on day one and stale forever after. Surfaced in the "Update
+ * Available" banner's "What's new" section via /version.json.
  */
-export const CHANGELOG: ChangelogEntry[] = [
-  {
-    version: "2026-07-05",
-    highlights: [
-      "Installable app (PWA) with offline app-shell support",
-      "Automatic update detection — reload prompt when a new build ships",
-      "OpenAPI/Swagger import now auto-discovers specs behind docs pages and resolves relative server URLs",
-      "Security scans can now run fully automatically after every request, with an opt-in for advanced attack-probe checks",
-    ],
-  },
-];
+export function latestChangelogEntry(): ChangelogEntry | null {
+  let highlights: string[] = [];
+  try {
+    highlights = JSON.parse(process.env.NEXT_PUBLIC_BUILD_COMMITS || "[]");
+  } catch {
+    highlights = [];
+  }
+  if (highlights.length === 0) return null;
+  return {
+    version: process.env.NEXT_PUBLIC_BUILD_ID || "dev",
+    highlights,
+  };
+}

@@ -330,3 +330,13 @@ body {
 .dark .driver-popover-arrow-side-right.driver-popover-arrow {
   border-right-color: #0d1020;
 }
+
+/* ── Tooltips are hover-only, and there is no real hover on touch devices —
+   below lg (where action buttons switch to always-visible/tap instead of
+   hover-to-reveal, see RequestSidebar.tsx/RequestTabStrip.tsx), suppress the
+   popup entirely rather than have it linger from a synthesized touch "hover". */
+@media (max-width: 1023px) {
+  .ant-tooltip {
+    display: none !important;
+  }
+}

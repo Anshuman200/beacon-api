@@ -19,11 +19,32 @@ function resolveBuildId(): string {
   }
 }
 
+/**
+ * The real recent commit history, for the "What's new" section of the
+ * update banner — captured here (build time, where a full git checkout is
+ * guaranteed to exist) rather than hand-maintained, which always drifts out
+ * of date, or read at request time, which would require `.git` to still be
+ * present in the deployed runtime container (often stripped for image size).
+ */
+function resolveRecentCommits(count = 5): string[] {
+  try {
+    const raw = execSync(`git log -${count} --pretty=format:%s`, { stdio: ["ignore", "pipe", "ignore"] }).toString();
+    return raw
+      .split("\n")
+      .map((line) => line.trim().replace(/^(feat|fix|chore|docs|refactor|test|perf|style)(\([^)]*\))?:\s*/i, ""))
+      .map((line) => (line ? line[0].toUpperCase() + line.slice(1) : line))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 const buildId = resolveBuildId();
 
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
+    NEXT_PUBLIC_BUILD_COMMITS: JSON.stringify(resolveRecentCommits()),
   },
   generateBuildId: async () => buildId,
 };

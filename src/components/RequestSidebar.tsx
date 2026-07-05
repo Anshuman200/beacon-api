@@ -357,7 +357,7 @@ export default function RequestSidebar() {
 
                       {/* Request actions */}
                       {!isEditingName && (
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover/req:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-0.5 lg:opacity-0 lg:group-hover/req:opacity-100 transition-opacity">
                           <Tooltip title="Rename">
                             <button
                               type="button"
@@ -482,7 +482,7 @@ export default function RequestSidebar() {
                             </span>
                           </span>
                         )}
-                        <div className="opacity-0 group-hover/folder:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
+                        <div className="lg:opacity-0 lg:group-hover/folder:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
                           <Tooltip title="Rename">
                             <button
                               type="button"
@@ -568,8 +568,8 @@ export default function RequestSidebar() {
                         </span>
                       )}
 
-                      {/* Hover actions */}
-                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
+                      {/* Hover actions — always visible below lg (no real hover on touch), hover-reveal at lg+ */}
+                      <div className="lg:opacity-0 lg:group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-opacity">
                         <Tooltip title="Rename">
                           <button
                             type="button"

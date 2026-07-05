@@ -37,7 +37,7 @@ export default function RequestTabStrip() {
               type="button"
               aria-label={`Close ${req.name} tab`}
               onClick={(e) => { e.stopPropagation(); closeTab(tab.requestId); }}
-              className="w-4 h-4 shrink-0 flex items-center justify-center rounded text-slate-400 opacity-0 group-hover/tab:opacity-100 hover:bg-slate-500/15 hover:text-rose-500 transition-all cursor-pointer"
+              className="w-4 h-4 shrink-0 flex items-center justify-center rounded text-slate-400 lg:opacity-0 lg:group-hover/tab:opacity-100 hover:bg-slate-500/15 hover:text-rose-500 transition-all cursor-pointer"
             >
               <FiX className="w-2.5 h-2.5" />
             </button>
