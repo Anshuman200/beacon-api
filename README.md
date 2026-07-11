@@ -1,6 +1,6 @@
-# Beacon API
+# Beacon
 
-Beacon API is a browser-based, client-only API testing tool — a Postman-style workspace for building, running, and **security-testing** HTTP requests, installable as a PWA, built entirely as a Next.js app with no backend/database of its own.
+Beacon is a browser-based, client-only API testing tool — a Postman-style workspace for building, running, and **security-testing** HTTP requests, installable as a PWA, built entirely as a Next.js app with no backend/database of its own.
 
 > **Why this doc exists:** this file is meant to be handed to another AI (ChatGPT, etc.) as project context so it can give informed suggestions. It describes what exists today, the architectural constraints that shaped it, and where things are intentionally incomplete.
 

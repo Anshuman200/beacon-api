@@ -14,7 +14,7 @@ const SeederForm = dynamic(() => import("./SeederForm"), {
   ssr: false,
   loading: () => (
     <div className="h-full flex items-center justify-center text-slate-700 dark:text-slate-400 text-sm">
-      Loading Beacon API…
+      Loading Beacon…
     </div>
   ),
 });

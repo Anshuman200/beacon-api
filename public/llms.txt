@@ -1,6 +1,6 @@
-# Beacon API
+# Beacon
 
-> Beacon API is a client-only workbench for testing, seeding, and securing HTTP APIs — a Postman-style request builder combined with sandboxed request/response scripting and a built-in, honest-by-design security-analysis module. There is no backend beyond a single generic CORS-bypass proxy; all collections, environments, and history are stored locally in the browser (encrypted at rest).
+> Beacon is a client-only workbench for testing, seeding, and securing HTTP APIs — a Postman-style request builder combined with sandboxed request/response scripting and a built-in, honest-by-design security-analysis module. There is no backend beyond a single generic CORS-bypass proxy; all collections, environments, and history are stored locally in the browser (encrypted at rest).
 
 ## What it does
 

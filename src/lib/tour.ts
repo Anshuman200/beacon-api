@@ -13,7 +13,7 @@ import type { DriveStep } from "driver.js";
 export const TOUR_STEPS: DriveStep[] = [
   {
     popover: {
-      title: "👋 Welcome to Beacon API",
+      title: "👋 Welcome to Beacon",
       description: "Let's get you building in under a minute — a request, a run, and a security scan that happens without you lifting a finger.",
       nextBtnText: "Let's go →",
     },

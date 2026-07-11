@@ -84,7 +84,7 @@ export default function Header() {
             <div className="relative w-9 h-9 rounded-xl bg-[#090b11]/90 border border-cyan-500/35 flex items-center justify-center shadow-lg shadow-cyan-500/20 overflow-hidden">
               <Image
                 src={ICONS.favicon}
-                alt="Beacon API Logo"
+                alt="Beacon Logo"
                 width={36}
                 height={36}
                 priority
@@ -95,10 +95,10 @@ export default function Header() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
-              <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight truncate">Beacon API</span>
+              <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight truncate">Beacon</span>
               <span className="hidden sm:inline-flex text-[10px] font-extrabold text-indigo-650 bg-indigo-500/10 border border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-500/15 dark:border-indigo-500/25 px-2 py-0.5 rounded-full leading-none shrink-0">v{APP_VERSION}</span>
             </div>
-            <p className="hidden md:block text-[11px] text-slate-550 dark:text-slate-400 mt-0.5 font-medium truncate">Advanced Client, Sandboxed Testing &amp; Scripting Suite</p>
+            <p className="hidden md:block text-[11px] text-slate-550 dark:text-slate-400 mt-0.5 font-medium truncate">Privacy-first API Testing Platform</p>
           </div>
         </div>
 

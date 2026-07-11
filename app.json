@@ -1,9 +1,9 @@
 {
-  "name": "Beacon API",
-  "shortName": "Beacon API",
-  "title": "Beacon API — Advanced Client, Sandboxed Testing & Scripting Suite",
-  "tagline": "Advanced Client, Sandboxed Testing & Scripting Suite",
-  "description": "Beacon API is a client-only workbench for testing, seeding, and securing your APIs — with sandboxed scripting, OpenAPI import, and automated security scans.",
+  "name": "Beacon",
+  "shortName": "Beacon",
+  "title": "Beacon — Privacy-first API Testing Platform",
+  "tagline": "Privacy-first API Testing Platform",
+  "description": "Beacon is a client-only workbench for testing, seeding, and securing your APIs — with sandboxed scripting, OpenAPI import, and automated security scans.",
   "author": {
     "name": "Ansh Singh",
     "email": "ansh.official03@gmail.com",

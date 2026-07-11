@@ -1,5 +1,5 @@
 /**
- * Beacon API — Built-in Demo Collection
+ * Beacon — Built-in Demo Collection
  * Showcases all features: params, headers, auth, body, tests, scripts, seeding
  */
 
@@ -504,8 +504,8 @@ console.log(\`[Posts] \${body.data.length} posts on page \${body.pagination.page
     body: {
       type: "json",
       rawText: JSON.stringify({
-        title: "Getting Started with Beacon API",
-        content: "Beacon API makes testing your APIs a delightful experience. With pre-request scripts, post-response assertions, and seeding...",
+        title: "Getting Started with Beacon",
+        content: "Beacon makes testing your APIs a delightful experience. With pre-request scripts, post-response assertions, and seeding...",
         category: "Technology",
         tags: ["api", "testing", "beacon"],
       }, null, 2),
@@ -562,7 +562,7 @@ be.test("Created post has id and slug", () => {
 
 be.test("Post data matches request body", () => {
   const body = be.response.json();
-  be.expect(body.data.title).to.equal("Getting Started with Beacon API");
+  be.expect(body.data.title).to.equal("Getting Started with Beacon");
   be.expect(body.data.category).to.equal("Technology");
 });
 

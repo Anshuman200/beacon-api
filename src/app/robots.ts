@@ -17,7 +17,7 @@ export default function robots(): MetadataRoute.Robots {
       { userAgent: "Applebot", allow: "/", disallow: DISALLOW },
 
       // AI crawlers — both the "read this page for a live answer" bots and the
-      // "train on this" bots. Beacon API wants to be readable and understood
+      // "train on this" bots. Beacon wants to be readable and understood
       // by AI tools, so these are allowed rather than the more common default
       // of blocking them; see /llms.txt and /ai.txt for the AI-facing summary.
       { userAgent: "GPTBot", allow: "/", disallow: DISALLOW }, // OpenAI — training

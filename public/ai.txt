@@ -1,4 +1,4 @@
-# ai.txt — AI crawling & training policy for Beacon API
+# ai.txt — AI crawling & training policy for Beacon
 # (an emerging, not-yet-standardized convention; see /llms.txt for the
 # canonical AI-facing summary of this site, and /robots.txt for the
 # per-crawler rules search and AI bots actually honor today)

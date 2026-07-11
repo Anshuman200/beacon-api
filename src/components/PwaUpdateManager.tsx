@@ -196,7 +196,7 @@ export default function PwaUpdateManager() {
               </div>
             ) : (
               <p className="text-[11px] text-slate-550 dark:text-slate-400 mt-0.5 leading-relaxed">
-                A new version of Beacon API is ready. Reload to get the latest features and fixes.
+                A new version of Beacon is ready. Reload to get the latest features and fixes.
               </p>
             )}
             <div className="flex items-center gap-2 mt-3">

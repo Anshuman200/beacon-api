@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/site";
 
 /**
- * Beacon API is a single-page, client-only app — there's genuinely only one
+ * Beacon is a single-page, client-only app — there's genuinely only one
  * indexable URL. Kept as its own file (rather than skipped) because it's
  * also what /robots.ts points crawlers at.
  */

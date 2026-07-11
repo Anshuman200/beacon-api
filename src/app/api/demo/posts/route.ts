@@ -16,7 +16,7 @@ function deterministicPost(id: number) {
     category: CATEGORIES[seed % CATEGORIES.length],
     author: `Author ${(seed % 5) + 1}`,
     authorId: `usr_${String((seed % 5) + 1).padStart(3, "0")}`,
-    content: `This is the content for post #${id}. Beacon API makes testing APIs delightful.`,
+    content: `This is the content for post #${id}. Beacon makes testing APIs delightful.`,
     tags: [
       words[(seed * 3) % words.length],
       words[(seed * 5) % words.length],
