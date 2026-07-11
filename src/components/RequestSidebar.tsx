@@ -4,13 +4,17 @@ import { useState } from "react";
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore, ApiRequest, Folder } from "@/store/collectionStore";
 import { DEMO_REQUESTS, DEMO_ENVIRONMENT } from "@/lib/demoData";
+import { METHOD_THEMES } from "@/lib/methodThemes";
 import {
   FiPlus, FiTrash2, FiCopy, FiSearch, FiClock, FiPlay,
   FiActivity, FiZap, FiEdit2, FiCheck, FiX, FiChevronDown, FiChevronRight,
   FiFolder, FiFolderPlus, FiMove, FiDownload,
 } from "react-icons/fi";
-import { Button, Input, Tooltip, Popconfirm, Segmented, Dropdown } from "antd";
+import { Button, Input, Tooltip, Popconfirm, Dropdown } from "antd";
 import { toast } from "@/lib/toast";
+
+// Distinct per-collection identity colours — cycles deterministically by collection id.
+const COLLECTION_ACCENTS = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981", "#ec4899", "#8b5cf6"];
 
 export default function RequestSidebar() {
   const { activeView, setActiveView, isRunning, openImportExport } = useSeederStore();
@@ -219,45 +223,53 @@ export default function RequestSidebar() {
     }
   };
 
-  // ── Method badge colour ──
-  const methodBadge = (method: string) => {
-    if (method === "GET") return "bg-emerald-500/10 text-emerald-500";
-    if (method === "DELETE") return "bg-rose-500/10 text-rose-500";
-    if (method === "PUT" || method === "PATCH") return "bg-amber-500/10 text-amber-550";
-    return "bg-indigo-500/10 text-indigo-500";
+  // ── Method badge theme (shared across the app — every method gets its own colour) ──
+  const methodTheme = (method: string) => METHOD_THEMES[method] || METHOD_THEMES.GET;
+
+  // ── Per-collection accent colour — gives each collection a distinct identity strip ──
+  const collectionAccent = (id: string) => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+    return COLLECTION_ACCENTS[hash % COLLECTION_ACCENTS.length];
   };
 
   return (
     <div className="w-full lg:h-full flex flex-col bg-slate-500/5 dark:bg-white/[0.015] border-r border-slate-500/10 dark:border-white/[0.06] lg:overflow-hidden" data-tour="sidebar">
 
-      {/* Tab switcher */}
+      {/* Tab switcher — plain flex buttons (not antd Segmented) so the two halves are always
+          exactly 50/50; Segmented's sliding thumb is JS-measured and can drift out of sync
+          with the actual cell width inside a resizing sidebar. */}
       <div className="p-3 border-b border-slate-500/10 dark:border-white/[0.06] shrink-0">
-        <Segmented
-          block
-          value={sidebarTab}
-          onChange={(val) => setSidebarTab(val as "requests" | "history")}
-          options={[
-            {
-              label: (
-                <div className="flex items-center justify-center gap-1.5 py-1 text-xs">
-                  <FiFolder className="w-3.5 h-3.5" />
-                  <span>Collections</span>
-                </div>
-              ),
-              value: "requests",
-            },
-            {
-              label: (
-                <div className="flex items-center justify-center gap-1.5 py-1 text-xs">
-                  <FiClock className="w-3.5 h-3.5" />
-                  <span>History</span>
-                </div>
-              ),
-              value: "history",
-            },
-          ]}
-          className="bg-slate-500/5 border border-slate-500/10 dark:bg-white/[0.01] dark:border-white/[0.05]"
-        />
+        <div role="tablist" aria-label="Sidebar view" className="flex items-stretch gap-1 p-1 rounded-md bg-slate-500/5 border border-slate-500/10 dark:bg-white/[0.01] dark:border-white/[0.05]">
+          {(["requests", "history"] as const).map((key, i, arr) => {
+            const { label, icon: Icon } = key === "requests"
+              ? { label: "Collections", icon: FiFolder }
+              : { label: "History", icon: FiClock };
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={sidebarTab === key}
+                onClick={() => setSidebarTab(key)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                    e.preventDefault();
+                    setSidebarTab(arr[(i + 1) % arr.length]);
+                  }
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-semibold transition-all cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-indigo-400/60 ${
+                  sidebarTab === key
+                    ? "bg-indigo-600 dark:bg-indigo-500 text-white shadow-sm"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Search + new collection */}
@@ -311,6 +323,7 @@ export default function RequestSidebar() {
                 const renderRequestRow = (req: ApiRequest) => {
                   const isActive = activeRequestId === req.id && activeView === "client";
                   const isEditingName = editingReqId === req.id;
+                  const theme = methodTheme(req.method);
                   const moveTargets = [
                     { key: "__root__", label: "No folder (root)", disabled: !req.folderId },
                     ...col.folders.map((f) => ({ key: f.id, label: f.name, disabled: req.folderId === f.id })),
@@ -320,15 +333,19 @@ export default function RequestSidebar() {
                     <div
                       key={req.id}
                       onClick={() => !isEditingName && handleRequestClick(col.id, req.id)}
+                      style={isActive ? { borderLeftColor: theme.primary, borderLeftWidth: 3 } : undefined}
                       className={`flex items-center justify-between px-2.5 py-2 rounded-lg border cursor-pointer group/req transition-all duration-150 ${
                         isActive
-                          ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-600 dark:text-indigo-400"
-                          : "bg-transparent border-transparent text-slate-700 dark:text-slate-400 hover:bg-slate-500/5 dark:hover:bg-white/[0.015] hover:border-slate-500/10"
+                          ? "bg-white dark:bg-white/[0.05] border-slate-200 dark:border-white/10 shadow-sm text-slate-900 dark:text-white"
+                          : "bg-slate-500/[0.02] dark:bg-white/[0.02] border-slate-500/10 dark:border-white/[0.05] text-slate-700 dark:text-slate-400 hover:-translate-y-px hover:shadow-sm hover:bg-white dark:hover:bg-white/[0.04] hover:border-slate-500/20 dark:hover:border-white/10"
                       }`}
                     >
                       <div className="flex-1 min-w-0 pr-1">
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-[8px] font-black px-1 rounded uppercase tracking-wider shrink-0 ${methodBadge(req.method)}`}>
+                          <span
+                            className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border uppercase tracking-wide shrink-0"
+                            style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}
+                          >
                             {req.method}
                           </span>
                           {isEditingName ? (
@@ -475,9 +492,11 @@ export default function RequestSidebar() {
                             maxLength={48}
                           />
                         ) : (
-                          <span className="flex-1 text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
-                            {folder.name}
-                            <span className="text-slate-400 dark:text-slate-500 font-normal ml-1.5">
+                          <span className="flex-1 min-w-0 flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+                              {folder.name}
+                            </span>
+                            <span className="shrink-0 text-slate-400 dark:text-slate-500 font-normal">
                               ({folderReqs.length})
                             </span>
                           </span>
@@ -515,7 +534,7 @@ export default function RequestSidebar() {
                         </div>
                       </div>
                       {folderExpanded && (
-                        <div className="ml-4 pl-2 border-l border-slate-500/10 dark:border-white/[0.05] space-y-0.5 mb-0.5">
+                        <div className="ml-4 pl-2 border-l space-y-0.5 mb-0.5" style={{ borderLeftColor: `${accent}33` }}>
                           {folderReqs.length === 0 ? (
                             <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-slate-600">Empty folder</p>
                           ) : (
@@ -527,14 +546,17 @@ export default function RequestSidebar() {
                   );
                 };
 
+                const accent = collectionAccent(col.id);
+
                 return (
                   <div key={col.id} className="px-2">
-                    {/* Collection header */}
+                    {/* Collection header — solid card with a per-collection accent edge for quick visual ID */}
                     <div
-                      className={`group flex items-center gap-1.5 px-2 py-1.5 rounded-xl cursor-pointer transition-all duration-150 ${
+                      style={{ borderLeftColor: accent, borderLeftWidth: 3 }}
+                      className={`group flex items-center gap-1.5 pl-2 pr-2 py-1.5 rounded-lg border cursor-pointer transition-all duration-150 ${
                         isColActive
-                          ? "bg-indigo-500/8 dark:bg-indigo-500/10"
-                          : "hover:bg-slate-500/5 dark:hover:bg-white/[0.02]"
+                          ? "bg-white dark:bg-white/[0.06] border-slate-200 dark:border-white/10 shadow-sm"
+                          : "bg-slate-500/[0.03] dark:bg-white/[0.03] border-slate-500/10 dark:border-white/[0.06] hover:bg-white dark:hover:bg-white/[0.05] hover:shadow-sm"
                       }`}
                       onClick={() => toggleCollapse(col.id)}
                     >
@@ -560,10 +582,15 @@ export default function RequestSidebar() {
                           maxLength={48}
                         />
                       ) : (
-                        <span className="flex-1 text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                          {col.name}
-                          <span className="text-slate-400 dark:text-slate-500 font-normal ml-1.5">
-                            ({col.requests.length})
+                        <span className="flex-1 min-w-0 flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {col.name}
+                          </span>
+                          <span
+                            className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: `${accent}1a`, color: accent }}
+                          >
+                            {col.requests.length}
                           </span>
                         </span>
                       )}
@@ -637,7 +664,7 @@ export default function RequestSidebar() {
 
                     {/* Requests list */}
                     {expanded && (
-                      <div className="ml-4 pl-2.5 border-l border-slate-500/10 dark:border-white/[0.05] mt-0.5 mb-1 space-y-0.5">
+                      <div className="ml-4 pl-2.5 border-l mt-0.5 mb-1 space-y-0.5" style={{ borderLeftColor: `${accent}33` }}>
                         {filteredReqs.length === 0 && col.folders.length === 0 && !search && (
                           <button
                             type="button"
@@ -679,7 +706,7 @@ export default function RequestSidebar() {
                 type="button"
                 onClick={handleAddCollection}
                 disabled={isRunning}
-                className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/5 rounded-xl border border-dashed border-slate-500/15 dark:border-white/[0.06] transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-500/5 hover:border-indigo-500/30 rounded-lg border border-dashed border-slate-500/25 dark:border-white/10 transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <FiFolderPlus className="w-3.5 h-3.5" />
                 New Collection

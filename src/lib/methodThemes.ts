@@ -1,7 +1,9 @@
-export const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
+export const HTTP_METHODS = ["GET", "QUERY", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"];
 
 export const METHOD_THEMES: Record<string, { bg: string; border: string; text: string; primary: string }> = {
   GET: { bg: "rgba(16, 185, 129, 0.12)", border: "rgba(16, 185, 129, 0.3)", text: "#10b981", primary: "#10b981" },
+  // QUERY: IETF-draft safe method for GET-with-a-body (complex search payloads); themed distinctly from GET/POST.
+  QUERY: { bg: "rgba(14, 165, 233, 0.12)", border: "rgba(14, 165, 233, 0.3)", text: "#0ea5e9", primary: "#0ea5e9" },
   POST: { bg: "rgba(99, 102, 241, 0.12)", border: "rgba(99, 102, 241, 0.3)", text: "#6366f1", primary: "#6366f1" },
   PUT: { bg: "rgba(245, 158, 11, 0.12)", border: "rgba(245, 158, 11, 0.3)", text: "#f59e0b", primary: "#f59e0b" },
   PATCH: { bg: "rgba(6, 182, 212, 0.12)", border: "rgba(6, 182, 212, 0.3)", text: "#06b6d4", primary: "#06b6d4" },

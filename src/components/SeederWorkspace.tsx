@@ -6,7 +6,8 @@ import { useCollectionStore, ApiRequest, Assertion, AssertionTarget, AssertionOp
 import { prepareRequest } from "@/lib/requestRunner";
 import { evaluateAssertions, AssertionResult } from "@/lib/assertions";
 import { runScript } from "@/lib/scriptRunner";
-import { resolveTemplates } from "@/lib/variables";
+import { resolveTemplates, lookupVariable } from "@/lib/variables";
+import VariableAwareField from "./VariableAwareField";
 import { fetchClientCredentialsToken, runAuthorizationCodeFlow, ensureOAuth2Token } from "@/lib/oauth2";
 import { hasFileEntry, findReservedKeyCollision, buildMultipartRequest } from "@/lib/multipartRequest";
 import SecurityPanel from "./SecurityPanel";
@@ -769,6 +770,7 @@ export default function SeederWorkspace() {
 
   const activeMethod = activeReq?.method || "GET";
   const mTheme = METHOD_THEMES[activeMethod] || METHOD_THEMES.GET;
+  const lookupVar = (key: string) => lookupVariable(key, activeEnv, globalsEnv, activeCollection?.variables);
 
   if (!activeReq) {
     return (
@@ -789,74 +791,92 @@ export default function SeederWorkspace() {
       <div className="w-full lg:w-1/2 lg:h-full flex flex-col border-r border-slate-500/10 dark:border-white/[0.06] lg:overflow-hidden lg:min-h-0 bg-slate-500/[0.005] dark:bg-[#07080f]/40 p-4">
 
         {/* Editable Title */}
-        <div className="flex items-center gap-3 mb-3 shrink-0">
+        <div className="flex items-center gap-2 mb-3 shrink-0">
           <Input
             value={activeReq.name}
             variant="borderless"
             onChange={(e) => handleUpdate({ name: e.target.value })}
-            className="text-base font-bold text-slate-900 dark:text-white hover:bg-slate-500/5 dark:hover:bg-white/5 rounded-lg px-2 py-1 flex-1 font-sans"
+            className="text-base font-bold text-slate-900 dark:text-white hover:bg-slate-500/5 dark:hover:bg-white/5 rounded-md px-2 py-1 flex-1 font-sans"
             placeholder="Untitled Request"
           />
           {activeEnvironmentId && (
-            <span className="text-[10px] shrink-0 font-bold bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-450 px-2 py-0.5 rounded-full uppercase">
+            <span className="text-[10px] shrink-0 font-bold bg-emerald-600 dark:bg-emerald-500 text-white px-2 py-0.5 rounded-md uppercase">
               {activeEnv?.name}
             </span>
           )}
         </div>
 
-        {/* Method & URL Input Bar */}
-        <div className="flex gap-2 mb-4 shrink-0" data-tour="method-url">
-          <ConfigProvider
-            theme={{
-              components: {
-                Select: {
-                  colorBgContainer: mTheme.bg,
-                  colorBorder: mTheme.border,
-                  colorText: mTheme.text,
-                  colorIcon: mTheme.text,
-                  colorPrimary: mTheme.border,
-                  colorPrimaryHover: mTheme.border,
-                  controlOutline: "transparent",
+        {/* Method + URL on top, path on its own row below — squeezing both onto one line
+            truncated long base URLs. Styled as one connected two-row control (shared border,
+            radius only on the outer corners). Base URL & path support hover-to-preview on
+            {{variable}} tokens (resolves against active env → global → collection). */}
+        <div
+          className="flex flex-col mb-4 shrink-0 rounded-lg border overflow-hidden"
+          style={{ borderColor: mTheme.border }}
+          data-tour="method-url"
+        >
+          <div className="flex items-stretch">
+            <ConfigProvider
+              theme={{
+                components: {
+                  Select: {
+                    colorBgContainer: mTheme.bg,
+                    colorBorder: "transparent",
+                    colorText: mTheme.text,
+                    colorIcon: mTheme.text,
+                    colorPrimary: "transparent",
+                    colorPrimaryHover: "transparent",
+                    controlOutline: "transparent",
+                    borderRadius: 0,
+                  },
                 },
-              },
-            }}
-          >
-            <Select
-              className="shrink-0 font-extrabold text-xs"
-              style={{ width: 105 }}
-              popupMatchSelectWidth={false}
-              value={activeMethod}
-              onChange={(v) => handleUpdate({ method: v })}
-              options={HTTP_METHODS.map((m) => ({
-                label: (
-                  <span
-                    style={{ color: METHOD_THEMES[m]?.text, fontWeight: 900 }}
-                    className="text-xs tracking-wider"
-                  >
-                    {m}
-                  </span>
-                ),
-                value: m,
-              }))}
+              }}
+            >
+              <Select
+                className="shrink-0 font-extrabold text-xs"
+                style={{ width: 110 }}
+                popupMatchSelectWidth={false}
+                value={activeMethod}
+                onChange={(v) => handleUpdate({ method: v })}
+                options={HTTP_METHODS.map((m) => ({
+                  label: (
+                    <span
+                      style={{ color: METHOD_THEMES[m]?.text, fontWeight: 900 }}
+                      className="text-xs tracking-wider"
+                    >
+                      {m}
+                    </span>
+                  ),
+                  value: m,
+                }))}
+              />
+            </ConfigProvider>
+
+            <div className="w-px shrink-0 bg-slate-500/15 dark:bg-white/10" />
+
+            <VariableAwareField
+              value={activeReq.baseUrl}
+              onChange={(v) => handleUpdate({ baseUrl: v })}
+              placeholder="https://api.example.com"
+              className="flex-1 min-w-0 px-3 py-2 font-mono text-xs bg-white dark:bg-white/[0.03] text-slate-900 dark:text-white"
+              lookup={lookupVar}
             />
-          </ConfigProvider>
+          </div>
 
-          <Input
-            value={activeReq.baseUrl}
-            onChange={(e) => handleUpdate({ baseUrl: e.target.value })}
-            placeholder="https://api.example.com"
-            className="flex-1 font-mono text-xs dark:text-white"
-          />
-        </div>
+          <div className="h-px shrink-0 bg-slate-500/15 dark:bg-white/10" />
 
-        <div className="flex gap-2 mb-4 shrink-0">
-          <span className="text-slate-500 font-mono select-none py-1.5 pl-3">/</span>
-          <Input
-            value={activeReq.endpoint}
-            onChange={(e) => handleUpdate({ endpoint: e.target.value })}
-            placeholder="posts/1"
-            className="flex-1 font-mono text-xs dark:text-white"
-          />
+          <div className="flex items-stretch">
+            <span className="flex items-center px-3 font-mono text-xs text-slate-400 dark:text-slate-600 bg-white dark:bg-white/[0.03] select-none">
+              /
+            </span>
+            <VariableAwareField
+              value={activeReq.endpoint}
+              onChange={(v) => handleUpdate({ endpoint: v })}
+              placeholder="posts/1"
+              className="flex-1 min-w-0 pr-3 py-2 font-mono text-xs bg-white dark:bg-white/[0.03] text-slate-900 dark:text-white"
+              lookup={lookupVar}
+            />
+          </div>
         </div>
 
         {/* Workspace Config Tabs */}

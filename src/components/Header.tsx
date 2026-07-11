@@ -6,7 +6,7 @@ import { FiRotateCcw, FiSun, FiMoon, FiHelpCircle, FiLayers, FiSettings, FiUploa
 import { useSeederStore } from "@/store/seederStore";
 import { useCollectionStore } from "@/store/collectionStore";
 import type { AppTheme } from "@/store/seederStore";
-import { APP_VERSION } from "@/lib/site";
+import { APP_VERSION, ICONS } from "@/lib/site";
 
 export default function Header() {
   const { modal } = App.useApp();
@@ -83,7 +83,7 @@ export default function Header() {
             {/* Glassmorphic squircle */}
             <div className="relative w-9 h-9 rounded-xl bg-[#090b11]/90 border border-cyan-500/35 flex items-center justify-center shadow-lg shadow-cyan-500/20 overflow-hidden">
               <Image
-                src="/BeaconAPI.png"
+                src={ICONS.favicon}
                 alt="Beacon API Logo"
                 width={36}
                 height={36}

@@ -13,16 +13,16 @@
   "themeColor": "#040509",
   "backgroundColor": "#040509",
   "icons": {
-    "favicon": "/BeaconAPI.png",
-    "icon192": "/icon-192.png",
-    "icon512": "/icon-512.png",
-    "maskable512": "/icon-maskable-512.png",
+    "favicon": "/brand/BeaconAPI.png",
+    "icon192": "/icons/icon-192.png",
+    "icon512": "/icons/icon-512.png",
+    "maskable512": "/icons/icon-maskable-512.png",
     "appleTouchIcon": "/apple-touch-icon.png",
-    "ogImage": "/og-image.png"
+    "ogImage": "/brand/og-image.png"
   },
   "screenshots": [
-    { "src": "/screenshot-workspace.png", "label": "Building and executing a request in the workspace" },
-    { "src": "/screenshot-security.png", "label": "Automated security scan findings for a request" }
+    { "src": "/screenshots/screenshot-workspace.png", "label": "Building and executing a request in the workspace" },
+    { "src": "/screenshots/screenshot-security.png", "label": "Automated security scan findings for a request" }
   ],
   "security": {
     "expiresInDays": 365

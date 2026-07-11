@@ -9,6 +9,7 @@ import { runScript } from "@/lib/scriptRunner";
 import { resolveTemplates } from "@/lib/variables";
 import { ensureOAuth2Token } from "@/lib/oauth2";
 import { hasFileEntry, findReservedKeyCollision, buildMultipartRequest } from "@/lib/multipartRequest";
+import { METHOD_THEMES } from "@/lib/methodThemes";
 import { FiPlay, FiSliders, FiCheckCircle, FiXCircle, FiTrendingUp, FiClock, FiActivity, FiLoader, FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { Button, Checkbox, InputNumber, Progress } from "antd";
 import { toast } from "@/lib/toast";
@@ -549,10 +550,7 @@ export default function CollectionRunner() {
                 const isSelected = selectedReqIds.includes(req.id);
                 const isCurrent = isRunning && currentRequestIndex === idx;
 
-                let methodBg = "bg-indigo-500/10 text-indigo-500";
-                if (req.method === "GET") methodBg = "bg-emerald-500/10 text-emerald-500";
-                if (req.method === "DELETE") methodBg = "bg-rose-500/10 text-rose-500";
-                if (req.method === "PUT" || req.method === "PATCH") methodBg = "bg-amber-500/10 text-amber-550";
+                const methodTheme = METHOD_THEMES[req.method] || METHOD_THEMES.GET;
 
                 return (
                   <div
@@ -570,7 +568,10 @@ export default function CollectionRunner() {
                     />
                     <div className="flex-1 min-w-0 pr-1">
                       <div className="flex items-center gap-1.5">
-                        <span className={`text-[8px] font-black px-1 rounded uppercase tracking-wider shrink-0 ${methodBg}`}>
+                        <span
+                          className="text-[8px] font-black px-1 rounded uppercase tracking-wider shrink-0"
+                          style={{ backgroundColor: methodTheme.bg, color: methodTheme.text }}
+                        >
                           {req.method}
                         </span>
                         <span className="truncate text-xs font-semibold">{req.name}</span>
@@ -731,10 +732,7 @@ export default function CollectionRunner() {
               const isExpanded = !!expandedLogIds[log.id];
               const ok = log.passed;
 
-              let methodBg = "bg-indigo-500/10 text-indigo-500";
-              if (log.method === "GET") methodBg = "bg-emerald-500/10 text-emerald-500";
-              if (log.method === "DELETE") methodBg = "bg-rose-500/10 text-rose-500";
-              if (log.method === "PUT" || log.method === "PATCH") methodBg = "bg-amber-500/10 text-amber-550";
+              const methodTheme = METHOD_THEMES[log.method] || METHOD_THEMES.GET;
 
               return (
                 <div
@@ -755,7 +753,10 @@ export default function CollectionRunner() {
                         <FiXCircle className="w-4 h-4 text-rose-500 shrink-0" />
                       )}
                       
-                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${methodBg}`}>
+                      <span
+                        className="text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0"
+                        style={{ backgroundColor: methodTheme.bg, color: methodTheme.text }}
+                      >
                         {log.method}
                       </span>
                       
